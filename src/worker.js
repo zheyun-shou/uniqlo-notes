@@ -1,10 +1,13 @@
 import { fetchUpstream, lookupProduct, parseProductInput } from './uniqlo.js';
+import { archiveBacklog, archiveEntry, archiveStatus, serveMedia } from './archive.js';
 
 const PRODUCT_CACHE_SECONDS = 60 * 60 * 24;
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // 存档图片公开可读（<img> 无法带口令），内容都是官网公开商品图
+    if (url.pathname.startsWith('/media/') && request.method === 'GET') return serveMedia(env, url.pathname.slice(7));
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
 
     try {
@@ -32,12 +35,17 @@ async function route(request, env, ctx, url) {
     return productLookup(input, opts, ctx);
   }
 
+  if (parts[0] === 'archive') {
+    if (method === 'GET') return json(await archiveStatus(env));
+    if (method === 'POST') return json(await archiveBacklog(env));
+  }
+
   if (parts[0] === 'entries') {
     const id = parts[1] ? decodeURIComponent(parts[1]) : null;
     if (!id && method === 'GET') return listEntries(env);
-    if (!id && method === 'POST') return createEntry(request, env);
+    if (!id && method === 'POST') return createEntry(request, env, ctx);
     if (id && method === 'GET') return getEntry(env, id);
-    if (id && method === 'PUT') return updateEntry(request, env, id);
+    if (id && method === 'PUT') return updateEntry(request, env, ctx, id);
     if (id && method === 'DELETE') return deleteEntry(env, id);
   }
 
@@ -127,7 +135,7 @@ async function getEntry(env, id) {
   return row ? json({ entry: rowToEntry(row) }) : json({ error: 'not_found' }, 404);
 }
 
-async function createEntry(request, env) {
+async function createEntry(request, env, ctx) {
   return withHttpErrors(async () => {
     const body = await readBody(request);
     const { productId, text } = sanitize(body);
@@ -138,17 +146,19 @@ async function createEntry(request, env) {
     await env.DB.prepare('INSERT INTO entries (id, product_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
       .bind(id, productId, text, createdAt, now)
       .run();
+    ctx.waitUntil(archiveEntry(env, id));
     return getEntry(env, id).then((r) => new Response(r.body, { status: 201, headers: r.headers }));
   });
 }
 
-async function updateEntry(request, env, id) {
+async function updateEntry(request, env, ctx, id) {
   return withHttpErrors(async () => {
     const { productId, text } = sanitize(await readBody(request));
     const r = await env.DB.prepare('UPDATE entries SET product_id = ?, data = ?, updated_at = ? WHERE id = ?')
       .bind(productId, text, Date.now(), id)
       .run();
     if (!r.meta.changes) return json({ error: 'not_found' }, 404);
+    ctx.waitUntil(archiveEntry(env, id));
     return getEntry(env, id);
   });
 }

@@ -4,11 +4,11 @@
   "main": "src/worker.js",
   "compatibility_date": "2026-10-01",
 
-  // 前端静态文件；/api/* 先交给 Worker 处理
+  // 前端静态文件；/api/* 和 /media/*（存档图片）先交给 Worker 处理
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*", "/media/*"]
   },
 
   "d1_databases": [
@@ -19,6 +19,12 @@
       "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
       "migrations_dir": "migrations"
     }
+  ],
+
+  // 官网图片存档（可选）：运行 `npx wrangler r2 bucket create uniqlo-fitlog-images` 后保留这段；
+  // 不想用 R2 就删掉这段，应用照常运行，只是不存档
+  "r2_buckets": [
+    { "binding": "IMAGES", "bucket_name": "uniqlo-fitlog-images" }
   ],
 
   "vars": {

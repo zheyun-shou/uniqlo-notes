@@ -66,9 +66,28 @@ function price(p) {
   }
 }
 
-function img(url, alt = '') {
-  return url ? `<img src="${esc(url)}" alt="${esc(alt)}" loading="lazy" referrerpolicy="no-referrer">` : '';
+// image 可以是 { url, archived } 或纯地址。有存档时优先显示存档，加载失败再回退官网原图
+function img(image, alt = '') {
+  if (!image) return '';
+  const { url, archived } = typeof image === 'string' ? { url: image } : image;
+  const src = archived ? `/media/${archived}` : url;
+  if (!src) return '';
+  const fallback = archived && url ? ` data-fallback="${esc(url)}"` : '';
+  return `<img src="${esc(src)}"${fallback} alt="${esc(alt)}" loading="lazy" referrerpolicy="no-referrer">`;
 }
+
+document.addEventListener(
+  'error',
+  (ev) => {
+    const t = ev.target;
+    if (t.tagName === 'IMG' && t.dataset.fallback) {
+      const u = t.dataset.fallback;
+      delete t.dataset.fallback;
+      t.src = u;
+    }
+  },
+  true,
+);
 
 let toastTimer;
 function toast(msg) {
@@ -94,9 +113,9 @@ function heroImage(entry) {
   if (entry.color) {
     const code = String(entry.color).split(' ')[0];
     const m = imgs.find((i) => i.color && (i.color === code || i.color.endsWith(code)));
-    if (m) return m.url;
+    if (m) return m;
   }
-  return imgs[0]?.url || '';
+  return imgs[0] || null;
 }
 
 // ---------- API ----------
@@ -427,7 +446,7 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
               .map((i) => {
                 const c = (p.colors || []).find((c) => c.code === i.color || i.color.endsWith(c.code));
                 const label = c ? `${c.code} ${c.name}`.trim() : i.color;
-                return `<button type="button" data-color="${esc(label)}" aria-pressed="${entry.color === label}" title="${esc(label)}">${img(i.url, label)}</button>`;
+                return `<button type="button" data-color="${esc(label)}" aria-pressed="${entry.color === label}" title="${esc(label)}">${img(i, label)}</button>`;
               })
               .join('')}</div>`
           : ''
@@ -549,7 +568,7 @@ async function renderDetail(id) {
   if (!e) throw new Error('找不到这条记录');
   const p = e.product || {};
   const hero = heroImage(e);
-  const gallery = [hero, ...(p.images || []).map((i) => i.url).filter((u) => u !== hero)].filter(Boolean).slice(0, 12);
+  const gallery = [hero, ...(p.images || []).filter((i) => i !== hero)].filter(Boolean).slice(0, 12);
   const related = entries.filter((x) => x.id !== e.id && x.product?.productId === p.productId);
 
   const row = (k, v) => (v ? `<dt>${k}</dt><dd>${v}</dd>` : '');
@@ -557,7 +576,7 @@ async function renderDetail(id) {
     <a class="back" href="#/">‹ 全部记录</a>
     <article class="detail">
       <div class="detail-hero">
-        ${gallery.length ? `<div class="gallery">${gallery.map((u) => img(u, p.name)).join('')}</div>` : ''}
+        ${gallery.length ? `<div class="gallery">${gallery.map((i) => img(i, p.name)).join('')}</div>` : ''}
         <div>
           <h1>${esc(p.name || p.productId)}</h1>
           <p style="margin:0 0 12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
@@ -623,7 +642,8 @@ async function renderDetail(id) {
 async function renderSettings() {
   const entries = await loadEntries().catch(() => state.entries || []);
   let info = null;
-  try { info = await api('/ping'); } catch {}
+  let archive = null;
+  try { [info, archive] = await Promise.all([api('/ping'), api('/archive')]); } catch {}
   const count = (k) => entries.filter((e) => e.verdict === k).length;
 
   app.innerHTML = `
@@ -637,6 +657,18 @@ async function renderSettings() {
         <div class="stat"><b>${count('want')}</b><span>想买</span></div>
       </div>
       ${info ? `<p class="hint">优衣库站点：${esc(info.region)} / ${esc(info.lang)}（在 wrangler.jsonc 的 vars 里修改）</p>` : ''}
+    </section>
+    <section class="panel">
+      <h2>官网图片存档</h2>
+      ${
+        !archive
+          ? '<p class="hint" style="margin:0">无法读取存档状态</p>'
+          : !archive.enabled
+            ? '<p class="hint" style="margin:0">未启用：服务器没有绑定 R2（见 README「官网图片存档」）。现在显示的是官网实时图片，商品下架后可能失效。</p>'
+            : `<p style="margin:0 0 10px">已存档 <b>${archive.archived}</b> / ${archive.total} 张商品图</p>
+               <p class="hint" style="margin:0 0 12px">保存记录时会自动把官网图复制一份到你自己的存储里，官网删图后照样能看。</p>
+               ${archive.archived < archive.total ? '<div class="actions" style="justify-content:flex-start"><button class="btn" id="backfill">补存剩下的图片</button></div>' : ''}`
+      }
     </section>
     <section class="panel">
       <h2>备份</h2>
@@ -681,6 +713,26 @@ async function renderSettings() {
     } catch (e) {
       toast(`导入失败：${e.message}`);
     }
+  });
+
+  app.querySelector('#backfill')?.addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    let total = 0;
+    try {
+      // 每次请求最多处理 30 张，循环到没有进展为止
+      for (;;) {
+        btn.textContent = `存档中…已完成 ${total} 张`;
+        const r = await api('/archive', { method: 'POST' });
+        total += r.archived;
+        if (!r.remaining || !r.archived) break;
+      }
+      await loadEntries(true);
+      toast(`新存档 ${total} 张`);
+    } catch (e) {
+      toast(`存档失败：${e.message}`);
+    }
+    renderSettings();
   });
 
   app.querySelector('#refresh').addEventListener('click', async () => {

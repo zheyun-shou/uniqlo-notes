@@ -246,7 +246,7 @@ function renderLogin() {
 // ---------- 列表 ----------
 
 async function renderList() {
-  app.innerHTML = `<div class="grid">${'<div class="card"><div class="thumb skeleton"></div><div class="body"><div class="skeleton" style="height:14px"></div></div></div>'.repeat(4)}</div>`;
+  app.innerHTML = `<div class="page-head"><h1>我的试穿</h1></div><div class="grid" style="margin-top:16px">${'<div class="card"><div class="thumb skeleton"></div><div class="body"><div class="skeleton" style="height:14px"></div></div></div>'.repeat(4)}</div>`;
   const entries = await loadEntries();
 
   if (!entries.length) {
@@ -270,14 +270,15 @@ async function renderList() {
     `<button class="chip" data-group="${group}" data-key="${key}" aria-pressed="${f[group] === key}">${esc(label)}${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
 
   app.innerHTML = `
+    <div class="page-head"><h1>我的试穿</h1><span class="count" id="count"></span></div>
     <div class="toolbar">
       <input class="search" type="search" placeholder="搜索名称、编号、备注…" value="${esc(f.q)}" aria-label="搜索">
-      <div class="chips" role="group" aria-label="分类">
-        ${chip('cat', 'all', '全部', entries.length)}
+      <div class="tabs" role="group" aria-label="分类">
+        ${chip('cat', 'all', '全部')}
         ${CATEGORIES.filter(([k]) => catCounts[k]).map(([k, n]) => chip('cat', k, n, catCounts[k])).join('')}
       </div>
     </div>
-    <div class="chips" role="group" aria-label="结论" style="margin:-4px 0 14px">
+    <div class="filters" role="group" aria-label="结论" style="margin:-4px 0 20px">
       ${chip('verdict', 'all', '所有结论')}
       ${Object.entries(VERDICT).filter(([k]) => verdictCounts[k]).map(([k, n]) => chip('verdict', k, n, verdictCounts[k])).join('')}
     </div>
@@ -295,6 +296,7 @@ async function renderList() {
         .toLowerCase();
       return hay.includes(q);
     });
+    app.querySelector('#count').textContent = `${list.length} 件`;
     grid.innerHTML = list.length
       ? list.map(cardHtml).join('')
       : `<p class="empty" style="grid-column:1/-1">没有符合条件的记录</p>`;
@@ -316,17 +318,17 @@ async function renderList() {
 
 function cardHtml(e) {
   const p = e.product || {};
-  const bits = [e.size && `尺码 ${e.size}`, e.fit && FIT[e.fit]].filter(Boolean).join(' · ');
+  const cap = [CAT_NAME[e.category], e.size && `试穿 ${e.size}`, e.fit && FIT[e.fit]].filter(Boolean).join(' · ');
   return `
     <a class="card" href="#/entry/${esc(e.id)}">
-      <div class="thumb">
-        ${img(heroImage(e), p.name)}
-        ${e.verdict ? `<span class="badge ${esc(e.verdict)}">${VERDICT[e.verdict]}</span>` : ''}
-      </div>
+      <div class="thumb">${img(heroImage(e), p.name)}</div>
       <div class="body">
+        ${colorDots(e)}
+        <div class="cap">${esc(cap)}</div>
         <div class="name">${esc(p.name || p.productId)}</div>
-        <div class="meta">${esc(bits || CAT_NAME[e.category] || '')}</div>
-        <div class="meta">${stars(e.rating)} ${e.triedAt ? esc(e.triedAt) : ''}</div>
+        ${entryPriceHtml(e)}
+        ${e.verdict ? `<div class="flag ${esc(e.verdict)}">${VERDICT[e.verdict]}</div>` : ''}
+        <div class="meta">${stars(e.rating)}<span>${e.triedAt ? esc(e.triedAt) : ''}</span></div>
       </div>
     </a>`;
 }
@@ -419,11 +421,31 @@ function numOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-// 购买价，比原价便宜时附上折扣，如「499 kr（-44%）」
-function paidText(e) {
-  const paid = price({ value: e.paidPrice, currency: e.currency });
-  if (!paid || !(e.originalPrice > e.paidPrice)) return paid;
-  return `${paid}（-${Math.round((1 - e.paidPrice / e.originalPrice) * 100)}%）`;
+// 价格块：比原价便宜时折后价标红、原价划线，并标出折扣
+function priceHtml(paid, original, currency, cls = '') {
+  const now = price({ value: paid, currency });
+  if (!now) return '';
+  const sale = original > paid;
+  return `<div class="price ${cls}${sale ? ' sale' : ''}"><b>${esc(now)}</b>${
+    sale ? `<s>${esc(price({ value: original, currency }))}</s><span class="off">-${Math.round((1 - paid / original) * 100)}%</span>` : ''
+  }</div>`;
+}
+
+// 记录的价格：优先用自己填的购买价/原价，没填就用当时的官网价
+function entryPriceHtml(e, cls) {
+  const p = e.product || {};
+  return priceHtml(e.paidPrice ?? p.price?.value, e.originalPrice ?? p.basePrice?.value, e.currency || p.price?.currency, cls);
+}
+
+// 官网色块小方格，试穿的颜色加框
+function colorDots(e) {
+  const colors = (e.product?.colors || []).filter((c) => c.chip);
+  if (!colors.length) return '';
+  const tried = String(e.color || '').split(' ')[0];
+  return `<div class="colors">${colors
+    .slice(0, 6)
+    .map((c) => `<img src="${esc(c.chip)}" alt="${esc(c.name)}" title="${esc(`${c.code} ${c.name}`)}" class="${c.code === tried ? 'on' : ''}" loading="lazy" referrerpolicy="no-referrer">`)
+    .join('')}${colors.length > 6 ? `<span>+${colors.length - 6}</span>` : ''}</div>`;
 }
 
 function phraseSuggestions(field) {
@@ -478,7 +500,7 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
           <div class="sub">
             <span>${esc(p.productId)}</span>
             ${p.category?.length ? `<span>${esc(p.category.join(' › '))}</span>` : ''}
-            ${price(p.price) ? `<span>${esc(price(p.price))}</span>` : ''}
+            ${priceHtml(p.price?.value, p.basePrice?.value, p.price?.currency)}
             ${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">官网页面 ↗</a>` : ''}
           </div>
           ${previous.length ? `<p class="hint">你之前试穿过这款 ${previous.length} 次：${previous.map((e) => `<a href="#/entry/${esc(e.id)}">${esc(e.triedAt || '')} ${esc(e.size || '')}</a>`).join('，')}</p>` : ''}
@@ -663,21 +685,24 @@ async function renderDetail(id) {
         ${gallery.length ? `<div class="gallery">${gallery.map((i) => img(i, p.name)).join('')}</div>` : ''}
         <div>
           <h1>${esc(p.name || p.productId)}</h1>
-          <p style="margin:0 0 12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <p class="pid">商品编号 ${esc(p.code || p.productId)}${p.category?.length ? ` · ${esc(p.category.join(' › '))}` : ''}</p>
+          ${entryPriceHtml(e, 'big')}
+          <div class="tags-row">
             ${e.verdict ? `<span class="badge ${esc(e.verdict)}">${VERDICT[e.verdict]}</span>` : ''}
             <span class="badge">${esc(CAT_NAME[e.category] || '其他')}</span>
             ${stars(e.rating)}
-          </p>
+          </div>
           <section class="panel">
+            <h2>试穿反馈</h2>
             <dl class="kv">
               ${row('试穿日期', esc(e.triedAt))}
               ${row('门店', esc(e.store))}
               ${row('颜色', esc(e.color))}
               ${row('尺码', esc(e.size))}
               ${row('尺码感受', FIT[e.fit] || '')}
-              ${row('原价', esc(price({ value: e.originalPrice, currency: e.currency })))}
-              ${row('购买价', esc(paidText(e)))}
               ${row('长度', LENGTH[e.length] || '')}
+              ${row('原价', esc(price({ value: e.originalPrice, currency: e.currency })))}
+              ${row('购买价', esc(price({ value: e.paidPrice, currency: e.currency })))}
               ${row('标签', esc((e.tags || []).join('、')))}
             </dl>
           </section>

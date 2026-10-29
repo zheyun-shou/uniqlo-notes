@@ -1,0 +1,17 @@
+{
+  "name": "uniqlo-fitlog",
+  "private": true,
+  "version": "0.1.0",
+  "description": "个人优衣库试穿手记：按商品编号查询款式、图片和分类，记录试穿反馈",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "db:migrate:local": "wrangler d1 migrations apply uniqlo-fitlog --local",
+    "db:migrate:remote": "wrangler d1 migrations apply uniqlo-fitlog --remote",
+    "deploy": "wrangler deploy",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "wrangler": "4.148.0"
+  }
+}

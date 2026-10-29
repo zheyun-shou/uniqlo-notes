@@ -402,6 +402,39 @@ async function renderEdit(id) {
   renderForm(app.querySelector('#form-slot'), structuredClone(entry), { editing: true });
 }
 
+// 常用短语：把以前填过的内容按逗号拆开，按用过的次数排序，点一下就能填进去（类似外卖备注）
+const PHRASE_SEP = /[,，、;；\n]+/;
+const STARTER_PHRASES = {
+  pros: ['版型好', '面料舒服', '颜色好看', '显瘦', '不透', '性价比高'],
+  notes: ['肩线偏宽', '袖子偏长', '有点透', '容易起球', '容易皱', '有静电'],
+  tags: ['通勤', '叠穿', '等打折'],
+};
+
+function splitPhrases(v) {
+  return (Array.isArray(v) ? v : String(v || '').split(PHRASE_SEP)).map((s) => s.trim()).filter(Boolean);
+}
+
+function numOrNull(v) {
+  const n = parseFloat(String(v ?? '').replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+// 购买价，比原价便宜时附上折扣，如「499 kr（-44%）」
+function paidText(e) {
+  const paid = price({ value: e.paidPrice, currency: e.currency });
+  if (!paid || !(e.originalPrice > e.paidPrice)) return paid;
+  return `${paid}（-${Math.round((1 - e.paidPrice / e.originalPrice) * 100)}%）`;
+}
+
+function phraseSuggestions(field) {
+  const count = new Map();
+  for (const e of state.entries || [])
+    for (const s of new Set(splitPhrases(e[field]))) if (s.length <= 20) count.set(s, (count.get(s) || 0) + 1);
+  const used = [...count].sort((a, b) => b[1] - a[1]).map(([s]) => s);
+  // 自己的常用语攒够之前，先给几个示例
+  return [...new Set(used.length < 6 ? [...used, ...STARTER_PHRASES[field]] : used)].slice(0, 30);
+}
+
 // ---------- 记录表单（新建/编辑共用） ----------
 
 function renderForm(slot, entry, { previous = [], editing = false } = {}) {
@@ -411,10 +444,19 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
   const colorChips = Object.fromEntries((p.colors || []).map((c) => [`${c.code} ${c.name}`.trim(), c.chip]));
   const sizeOpts = p.sizes?.length ? p.sizes : DEFAULT_SIZES;
   const stores = [...new Set((state.entries || []).map((e) => e.store).filter(Boolean))];
+  // 购买价默认是当时官网售价（有折扣就是折后价），原价默认是官网没打折的价格
+  const currency = entry.currency || p.price?.currency || p.basePrice?.currency || 'SEK';
+  const paidPrice = entry.paidPrice ?? p.price?.value ?? '';
+  const originalPrice = entry.originalPrice ?? p.basePrice?.value ?? p.price?.value ?? '';
 
   const seg = (name, map, value) =>
     `<div class="seg" role="radiogroup">${Object.entries(map)
       .map(([k, v]) => `<label><input type="radio" name="${name}" value="${k}" ${value === k ? 'checked' : ''}><span>${v}</span></label>`)
+      .join('')}</div>`;
+
+  const phrases = (name) =>
+    `<div class="phrases" data-for="${name}">${phraseSuggestions(name)
+      .map((t) => `<button type="button" data-t="${esc(t)}">${esc(t)}</button>`)
       .join('')}</div>`;
 
   // 点选的选项 + 一个「其他」输入框（选项里没有时再手打）
@@ -481,9 +523,11 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
           <datalist id="stores">${stores.map((s) => `<option value="${esc(s)}">`).join('')}</datalist>
         </label>
         <div class="field full"><span>结论</span>${seg('verdict', VERDICT, entry.verdict)}</div>
-        <label class="field full"><span>喜欢的地方</span><textarea name="pros" placeholder="版型、面料、颜色…">${esc(entry.pros || '')}</textarea></label>
-        <label class="field full"><span>不满意 / 备注</span><textarea name="notes" placeholder="肩线、袖长、透不透、起不起球…">${esc(entry.notes || '')}</textarea></label>
-        <label class="field full"><span>标签（逗号分隔）</span><input type="text" name="tags" value="${esc((entry.tags || []).join(', '))}" placeholder="通勤, 叠穿, 等打折"></label>
+        <label class="field"><span>原价（${esc(currency)}）</span><input type="number" name="originalPrice" value="${esc(originalPrice)}" min="0" step="any" inputmode="decimal"></label>
+        <label class="field"><span>购买价（${esc(currency)}）</span><input type="number" name="paidPrice" value="${esc(paidPrice)}" min="0" step="any" inputmode="decimal"></label>
+        <div class="field full"><label for="f-pros">喜欢的地方</label><textarea id="f-pros" name="pros" placeholder="版型、面料、颜色…">${esc(entry.pros || '')}</textarea>${phrases('pros')}</div>
+        <div class="field full"><label for="f-notes">不满意 / 备注</label><textarea id="f-notes" name="notes" placeholder="肩线、袖长、透不透、起不起球…">${esc(entry.notes || '')}</textarea>${phrases('notes')}</div>
+        <div class="field full"><label for="f-tags">标签（逗号分隔）</label><input type="text" id="f-tags" name="tags" value="${esc((entry.tags || []).join(', '))}" placeholder="通勤, 叠穿, 等打折">${phrases('tags')}</div>
       </div>
       <p class="error" id="save-err" hidden></p>
       <div class="actions">
@@ -520,6 +564,26 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
     }),
   );
 
+  // 常用短语：点一下加到末尾，已经填了的再点一下就去掉
+  slot.querySelectorAll('.phrases').forEach((box) => {
+    const input = form.elements[box.dataset.for];
+    const joiner = box.dataset.for === 'tags' ? ', ' : '，';
+    const sync = () => {
+      const have = new Set(splitPhrases(input.value));
+      box.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', have.has(b.dataset.t)));
+    };
+    box.addEventListener('click', (ev) => {
+      const b = ev.target.closest('button');
+      if (!b) return;
+      const t = b.dataset.t;
+      const list = splitPhrases(input.value);
+      input.value = (list.includes(t) ? list.filter((x) => x !== t) : [...list, t]).join(joiner);
+      sync();
+    });
+    input.addEventListener('input', sync);
+    sync();
+  });
+
   // 选了选项就清空「其他」，在「其他」里打字就取消选项
   for (const name of ['color', 'size']) {
     const other = form.elements[`${name}_other`];
@@ -554,6 +618,9 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
       rating,
       store: (fd.get('store') || '').trim(),
       verdict: fd.get('verdict') || '',
+      originalPrice: numOrNull(fd.get('originalPrice')),
+      paidPrice: numOrNull(fd.get('paidPrice')),
+      currency,
       pros: (fd.get('pros') || '').trim(),
       notes: (fd.get('notes') || '').trim(),
       tags: String(fd.get('tags') || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean),
@@ -608,6 +675,8 @@ async function renderDetail(id) {
               ${row('颜色', esc(e.color))}
               ${row('尺码', esc(e.size))}
               ${row('尺码感受', FIT[e.fit] || '')}
+              ${row('原价', esc(price({ value: e.originalPrice, currency: e.currency })))}
+              ${row('购买价', esc(paidText(e)))}
               ${row('长度', LENGTH[e.length] || '')}
               ${row('标签', esc((e.tags || []).join('、')))}
             </dl>
@@ -619,7 +688,7 @@ async function renderDetail(id) {
             <dl class="kv">
               ${row('编号', esc(p.productId))}
               ${row('官网分类', esc((p.category || []).join(' › ')))}
-              ${row('价格', esc(price(p.price)))}
+              ${row('官网价', esc(price(p.price)))}
               ${row('材质', esc(p.composition))}
               ${row('官网', p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">打开商品页 ↗</a>` : '')}
             </dl>

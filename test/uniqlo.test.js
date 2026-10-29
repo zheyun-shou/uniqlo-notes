@@ -44,6 +44,7 @@ test('normalizeApi 整理成统一结构', () => {
   assert.deepEqual(p.colors[0], { code: '09', name: 'BLACK', chip: null });
   assert.deepEqual(p.sizes, ['S', 'M']);
   assert.deepEqual(p.price, { value: 199, currency: 'SEK' });
+  assert.deepEqual(p.basePrice, { value: 199, currency: 'SEK' });
   assert.equal(p.url, 'https://www.uniqlo.com/se/en/products/E465185-000/00');
 });
 
@@ -87,6 +88,7 @@ test('extractPdpProduct + lookupProduct：从真实商品页的嵌入数据读�
   assert.match(p.colors[0].chip, /goods_32_486817_chip\.jpg$/);
   assert.deepEqual(p.sizes, ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL']);
   assert.deepEqual(p.price, { value: 499, currency: 'SEK' });
+  assert.deepEqual(p.basePrice, { value: 899, currency: 'SEK' });
   assert.match(p.composition, /^Shell: 65% Cotton/);
   assert.deepEqual(p.images.slice(0, 2).map((i) => i.color), ['32', '09']);
   assert.match(p.images[0].url, /^https:\/\/image\.uniqlo\.com\/.+eugoods_32_486817_3x4\.jpg$/);

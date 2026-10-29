@@ -152,10 +152,10 @@ export function normalizeApi(item, details, parsed, { region, lang }) {
   const sizes = (item.sizes || details?.sizes || []).map((s) => str(s.name || s.displayCode || s.code)).filter(Boolean);
 
   const prices = item.prices || details?.prices || {};
-  const priceObj = prices.promo || prices.base || null;
-  const price = priceObj
-    ? { value: priceObj.value ?? null, currency: str(priceObj.currency?.code || prices.base?.currency?.code) }
-    : null;
+  const toPrice = (o) => (o ? { value: o.value ?? null, currency: str(o.currency?.code || prices.base?.currency?.code) } : null);
+  // price 是当前售价（有折扣时为折后价），basePrice 是没打折的原价
+  const price = toPrice(prices.promo || prices.base);
+  const basePrice = toPrice(prices.base);
 
   const category = breadcrumbNames(details?.breadcrumbs || item.breadcrumbs);
   const gender = str(item.genderCategory || item.genderName || details?.genderCategory) || category[0] || '';
@@ -171,6 +171,7 @@ export function normalizeApi(item, details, parsed, { region, lang }) {
     colors,
     sizes,
     price,
+    basePrice,
     composition: str(details?.composition) || '',
     rating: item.rating ? { average: item.rating.average ?? null, count: item.rating.count ?? null } : null,
     url: productPageUrl(region, lang, item.productId, priceGroup),
@@ -239,6 +240,7 @@ function normalizePage(meta, parsed, url) {
     colors: [],
     sizes: [],
     price: meta.price,
+    basePrice: null,
     composition: '',
     rating: null,
     url,

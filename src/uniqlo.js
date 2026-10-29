@@ -1,7 +1,9 @@
 // 优衣库商品查询。
-// 优衣库没有公开文档的 API；这里用的是官网前端自己调用的 commerce v5 接口，
-// 字段可能随时变化，所以解析一律做成“尽量取、取不到就留空”，
-// 接口失败时再退回解析商品页 HTML（og 标签 / JSON-LD）。
+// 官网商品页的 HTML 里嵌着完整的商品数据（window.__PRELOADED_STATE__ → entity.pdpEntity），
+// 名称、分类、颜色、尺码、价格、各颜色图片都在里面，这里直接从页面读取。
+// （官网的 commerce 接口要求官网前端专用的客户端标识，我们不冒充，所以不用接口。）
+// 字段可能随官网改版变化，解析一律做成“尽量取、取不到就留空”；
+// 读不到嵌入数据时退回 og 标签 / JSON-LD。
 
 // 如实标明身份，不伪装成浏览器
 const UA = 'uniqlo-notes/0.1 (personal fit log; +https://github.com/zheyun-shou/uniqlo-notes)';
@@ -25,86 +27,31 @@ export function parseProductInput(raw) {
   return { code, productId: `${prefix}${code}-${suffix}`, priceGroup: pg ? pg[1] : null };
 }
 
-function apiBase(region, lang) {
-  return `https://www.uniqlo.com/${region}/api/commerce/v5/${lang}`;
-}
-
 export function productPageUrl(region, lang, productId, priceGroup = '00') {
   return `https://www.uniqlo.com/${region}/${lang}/products/${productId}/${priceGroup || '00'}`;
 }
 
-async function getJson(url, region) {
-  let res;
-  try {
-    res = await fetch(url, {
-      headers: {
-        'User-Agent': UA,
-        Accept: 'application/json',
-      },
-    });
-  } catch (e) {
-    return { url, status: 0, json: null, error: String(e?.message || e) };
-  }
-  const text = await res.text();
-  let json = null;
-  try {
-    json = JSON.parse(text);
-  } catch {}
-  return { url, status: res.status, json, text: json ? undefined : text.slice(0, 500) };
-}
-
-const itemsOf = (r) => r?.json?.result?.items || r?.json?.items || [];
-
-/** 调用上游，返回原始响应（也用于 /raw 调试接口） */
+/** 请求商品页，返回原始结果（也用于 /raw 调试接口） */
 export async function fetchUpstream(input, { region, lang }) {
   const parsed = parseProductInput(input);
   if (!parsed) return { parsed: null, steps: [] };
-  const base = apiBase(region, lang);
-  const steps = [];
-
-  // 1) 按完整编号
-  const byId = await getJson(
-    `${base}/products?productIds=${encodeURIComponent(parsed.productId)}&httpFailure=true`,
-    region,
-  );
-  steps.push({ name: 'byId', ...byId });
-  let item = itemsOf(byId)[0];
-
-  // 2) 用 6 位数字搜索（后缀不是 -000 或前缀不是 E 时）
-  if (!item) {
-    const search = await getJson(`${base}/products?q=${parsed.code}&limit=10&httpFailure=true`, region);
-    steps.push({ name: 'search', ...search });
-    const list = itemsOf(search);
-    item = list.find((x) => String(x.productId || '').includes(parsed.code)) || null;
-  }
-
-  // 3) 详情：分类面包屑、材质等
-  let details = null;
-  if (item?.productId) {
-    const pg = parsed.priceGroup || item.priceGroup || '00';
-    const d = await getJson(
-      `${base}/products/${encodeURIComponent(item.productId)}/price-groups/${pg}/details?includeModelSize=false&httpFailure=true`,
-      region,
-    );
-    steps.push({ name: 'details', ...d });
-    details = d.json?.result || null;
-  }
-
-  // 4) 接口都没拿到 → 商品页 HTML
-  let page = null;
-  if (!item) {
-    const url = productPageUrl(region, lang, parsed.productId, parsed.priceGroup);
-    try {
-      const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html' } });
+  const url = productPageUrl(region, lang, parsed.productId, parsed.priceGroup);
+  const step = { name: 'page', url, status: 0 };
+  let product = null;
+  let meta = null;
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html' } });
+    step.status = res.status;
+    if (res.ok) {
       const html = await res.text();
-      page = { url, status: res.status, meta: res.ok ? parseHtml(html) : null };
-    } catch (e) {
-      page = { url, status: 0, error: String(e) };
+      product = extractPdpProduct(html, parsed.productId);
+      if (!product) meta = parseHtml(html);
+      step.found = product ? 'preloadedState' : meta?.name ? 'meta' : 'none';
     }
-    steps.push({ name: 'page', ...page });
+  } catch (e) {
+    step.error = String(e?.message || e);
   }
-
-  return { parsed, item, details, page, steps };
+  return { parsed, product, meta, steps: [step] };
 }
 
 /**
@@ -112,12 +59,56 @@ export async function fetchUpstream(input, { region, lang }) {
  * 返回 { product }；查不到时 product 为 null，upstreamDown 表示优衣库根本没正常响应（被拦截/宕机）。
  */
 export async function lookupProduct(input, opts) {
-  const { parsed, item, details, page, steps } = await fetchUpstream(input, opts);
+  const { parsed, product, meta, steps } = await fetchUpstream(input, opts);
   if (!parsed) return { product: null };
-  if (item) return { product: normalizeApi(item, details, parsed, opts) };
-  if (page?.meta?.name) return { product: normalizePage(page.meta, parsed, page.url) };
+  if (product) return { product: normalizeApi(product, product, parsed, opts) };
+  if (meta?.name) return { product: normalizePage(meta, parsed, steps[0].url) };
   const upstreamDown = steps.every((s) => !s.status || s.status >= 500 || s.status === 403 || s.status === 429);
   return { product: null, upstreamDown, statuses: steps.map((s) => `${s.name}:${s.status}`) };
+}
+
+/**
+ * 从商品页 HTML 里取出 pdpEntity 里的商品对象。
+ * 整个 __PRELOADED_STATE__ 接近 1MB，Workers 免费套餐 CPU 时间很紧，
+ * 所以只定位到 "pdpEntity" 这一小段（约 10KB）再解析。
+ */
+export function extractPdpProduct(html, productId) {
+  let from = 0;
+  for (;;) {
+    const i = html.indexOf('"pdpEntity":', from);
+    if (i < 0) return null;
+    from = i + 12;
+    const start = html.indexOf('{', from);
+    if (start < 0) return null;
+    const end = matchBrace(html, start);
+    if (end < 0) continue;
+    let entity;
+    try {
+      entity = JSON.parse(html.slice(start, end + 1));
+    } catch {
+      continue;
+    }
+    const products = Object.values(entity || {})
+      .map((e) => e?.product)
+      .filter((p) => p?.productId);
+    if (products.length) return products.find((p) => p.productId === productId) || products[0];
+  }
+}
+
+// 从 start 处的 { 开始，找到与之配对的 }（跳过字符串里的括号）
+function matchBrace(s, start) {
+  let depth = 0;
+  let inStr = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (inStr) {
+      if (c === 92) i++; // \
+      else if (c === 34) inStr = false; // "
+    } else if (c === 34) inStr = true;
+    else if (c === 123) depth++; // {
+    else if (c === 125 && --depth === 0) return i; // }
+  }
+  return -1;
 }
 
 // ---------- 解析 ----------
@@ -154,10 +145,10 @@ export function normalizeApi(item, details, parsed, { region, lang }) {
   }
   for (const x of imgs.sub || []) push(typeof x === 'string' ? x : x?.url || x?.image, null);
 
-  const colors = (item.colors || details?.colors || []).map((c) => ({
-    code: str(c.displayCode || c.code),
-    name: str(c.name),
-  }));
+  const colors = (item.colors || details?.colors || []).map((c) => {
+    const code = str(c.displayCode || c.code);
+    return { code, name: str(c.name), chip: absUrl(imgs.chip?.[code]) || null };
+  });
   const sizes = (item.sizes || details?.sizes || []).map((s) => str(s.name || s.displayCode || s.code)).filter(Boolean);
 
   const prices = item.prices || details?.prices || {};

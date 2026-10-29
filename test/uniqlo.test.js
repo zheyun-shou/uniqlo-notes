@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseProductInput, normalizeApi, parseHtml, lookupProduct } from '../src/uniqlo.js';
+import { readFileSync } from 'node:fs';
+import { parseProductInput, normalizeApi, parseHtml, lookupProduct, extractPdpProduct } from '../src/uniqlo.js';
 
 const opts = { region: 'se', lang: 'en' };
 
@@ -40,7 +41,7 @@ test('normalizeApi 整理成统一结构', () => {
   assert.equal(p.name, 'AIRism Cotton Oversized T-Shirt');
   assert.deepEqual(p.category, ['MEN', 'Tops', 'T-Shirts']);
   assert.deepEqual(p.images.map((i) => i.color), ['09', '00', null]);
-  assert.deepEqual(p.colors[0], { code: '09', name: 'BLACK' });
+  assert.deepEqual(p.colors[0], { code: '09', name: 'BLACK', chip: null });
   assert.deepEqual(p.sizes, ['S', 'M']);
   assert.deepEqual(p.price, { value: 199, currency: 'SEK' });
   assert.equal(p.url, 'https://www.uniqlo.com/se/en/products/E465185-000/00');
@@ -67,21 +68,36 @@ test('parseHtml 读取 og 标签和 JSON-LD', () => {
   assert.deepEqual(m.price, { value: 149, currency: 'SEK' });
 });
 
-test('lookupProduct：按编号查不到时用搜索兜底', async () => {
+test('extractPdpProduct + lookupProduct：从真实商品页的嵌入数据读出完整信息', async () => {
+  const html = readFileSync(new URL('./fixtures/pdp-E486817-000.html', import.meta.url), 'utf8');
+  const raw = extractPdpProduct(html, 'E486817-000');
+  assert.equal(raw.productId, 'E486817-000');
+
   const calls = [];
   globalThis.fetch = async (url) => {
     calls.push(String(url));
-    const body = String(url).includes('productIds=')
-      ? { status: 'ok', result: { items: [] } }
-      : String(url).includes('?q=')
-        ? { status: 'ok', result: { items: [{ ...item, productId: 'E465185-001' }] } }
-        : { status: 'ok', result: details };
-    return new Response(JSON.stringify(body), { status: 200 });
+    return new Response(html, { status: 200, headers: { 'content-type': 'text/html' } });
   };
-  const { product: p } = await lookupProduct('465185', opts);
-  assert.equal(p.productId, 'E465185-001');
-  assert.deepEqual(p.category, ['MEN', 'Tops', 'T-Shirts']);
-  assert.match(calls[2], /products\/E465185-001\/price-groups\/00\/details/);
+  const { product: p } = await lookupProduct('486817', opts);
+  assert.deepEqual(calls, ['https://www.uniqlo.com/se/en/products/E486817-000/00']);
+  assert.equal(p.name, 'Hooded Blouson');
+  assert.equal(p.gender, 'UNISEX');
+  assert.deepEqual(p.category, ['men', 'outerwear', 'blousons and parkas', 'blousons']);
+  assert.deepEqual(p.colors.map((c) => `${c.code} ${c.name}`), ['32 BEIGE', '09 BLACK']);
+  assert.match(p.colors[0].chip, /goods_32_486817_chip\.jpg$/);
+  assert.deepEqual(p.sizes, ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL']);
+  assert.deepEqual(p.price, { value: 499, currency: 'SEK' });
+  assert.match(p.composition, /^Shell: 65% Cotton/);
+  assert.deepEqual(p.images.slice(0, 2).map((i) => i.color), ['32', '09']);
+  assert.match(p.images[0].url, /^https:\/\/image\.uniqlo\.com\/.+eugoods_32_486817_3x4\.jpg$/);
+});
+
+test('extractPdpProduct：没有嵌入数据时返回 null，退回 og 标签', async () => {
+  assert.equal(extractPdpProduct('<html><script>var x = {"pdpEntity": broken</script></html>', 'E1-000'), null);
+  globalThis.fetch = async () => new Response('<meta property="og:title" content="Some Tee | UNIQLO SE">', { status: 200 });
+  const { product: p } = await lookupProduct('111111', opts);
+  assert.equal(p.name, 'Some Tee');
+  assert.equal(p.source, 'page');
 });
 
 test('lookupProduct：连不上优衣库时标记 upstreamDown', async () => {
@@ -93,11 +109,8 @@ test('lookupProduct：连不上优衣库时标记 upstreamDown', async () => {
   assert.equal(r.upstreamDown, true);
 });
 
-test('lookupProduct：接口正常但商品不存在时不是 upstreamDown', async () => {
-  globalThis.fetch = async (url) =>
-    String(url).includes('/api/')
-      ? new Response(JSON.stringify({ status: 'ok', result: { items: [] } }), { status: 200 })
-      : new Response('not found', { status: 404 });
+test('lookupProduct：商品页 404 时是“查不到”而不是 upstreamDown', async () => {
+  globalThis.fetch = async () => new Response('not found', { status: 404 });
   const r = await lookupProduct('999999', opts);
   assert.equal(r.product, null);
   assert.equal(r.upstreamDown, false);

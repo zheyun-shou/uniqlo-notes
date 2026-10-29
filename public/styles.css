@@ -147,6 +147,14 @@ input:focus, select:focus, textarea:focus, .search:focus { outline: 2px solid co
 .seg input:checked + span { background: var(--text); color: var(--bg); }
 .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -2px; }
 
+.pick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pick label { cursor: pointer; position: relative; }
+.pick label input { position: absolute; opacity: 0; pointer-events: none; }
+.pick label span { display: block; min-width: 44px; text-align: center; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); font-size: 14px; }
+.pick label .dot { display: inline-block; width: 16px; height: 16px; border-radius: 50%; object-fit: cover; vertical-align: -3px; margin-right: 6px; border: 1px solid var(--line); }
+.pick label input:checked + span { background: var(--text); color: var(--bg); border-color: var(--text); }
+.pick label input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pick input[type=text] { flex: 1 1 90px; min-width: 90px; width: auto; padding: 7px 12px; border-radius: 999px; }
 .star-input { display: flex; gap: 2px; }
 .star-input button { background: none; border: 0; padding: 2px; font-size: 26px; line-height: 1; cursor: pointer; color: var(--line); }
 .star-input button.on { color: var(--warn); }

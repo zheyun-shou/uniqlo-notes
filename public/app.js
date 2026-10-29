@@ -11,7 +11,7 @@ const CATEGORIES = [
   ['skirt', '裙子/连衣裙', /skirts?|kjol|\bdress(es)?\b(?!\s*shirt)|klänning/i],
   ['pants', '裤子', /pants|trousers|byxa|byxor|jeans|chinos?|\bshorts\b|joggers?|leggings/i],
   ['down', '羽绒/棉服', /(?<![-\w])down\b|\bdun\b|puffer|padded|vadderad/i],
-  ['outer', '外套/夹克', /jackets?|jacka|coats?|kappa|\brock\b|blazer|parka|outerwear|ytterkläder|\bvests?\b|väst|gilet/i],
+  ['outer', '外套/夹克', /jackets?|jacka|coats?|kappa|blousons?|\brock\b|blazer|parka|outerwear|ytterkläder|\bvests?\b|väst|gilet/i],
   ['knit', '针织/毛衣', /knit|sweaters?|cardigan|stickad|kofta|merino|cashmere|kashmir/i],
   ['sweat', '卫衣/抓绒', /sweatshirt|sweat|hoodie|huvtröja|fleece/i],
   ['tops', 'T恤/上衣', /t-?shirts?|\btees?\b|\btops?\b|topp|polo|tank|linne|airism|heattech/i],
@@ -21,6 +21,8 @@ const CATEGORIES = [
 const CAT_NAME = Object.fromEntries(CATEGORIES.map(([k, n]) => [k, n]));
 
 const FIT = { small: '偏小', true: '合适', large: '偏大' };
+// 官网没给出尺码列表时用的常见尺码
+const DEFAULT_SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
 const LENGTH = { short: '偏短', ok: '合适', long: '偏长' };
 const VERDICT = { bought: '已购买', want: '想买', maybe: '再看看', pass: '不买' };
 
@@ -406,7 +408,8 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
   const p = entry.product;
   const manual = p.source === 'manual' || !p.name;
   const colorOpts = (p.colors || []).map((c) => `${c.code} ${c.name}`.trim());
-  const sizeOpts = p.sizes || [];
+  const colorChips = Object.fromEntries((p.colors || []).map((c) => [`${c.code} ${c.name}`.trim(), c.chip]));
+  const sizeOpts = p.sizes?.length ? p.sizes : DEFAULT_SIZES;
   const stores = [...new Set((state.entries || []).map((e) => e.store).filter(Boolean))];
 
   const seg = (name, map, value) =>
@@ -414,14 +417,14 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
       .map(([k, v]) => `<label><input type="radio" name="${name}" value="${k}" ${value === k ? 'checked' : ''}><span>${v}</span></label>`)
       .join('')}</div>`;
 
-  const selectOrText = (name, opts, value, placeholder) => {
-    if (!opts.length) return `<input type="text" name="${name}" value="${esc(value)}" placeholder="${placeholder}">`;
-    const has = !value || opts.includes(value);
-    return `<select name="${name}">
-      <option value="">—</option>
-      ${opts.map((o) => `<option ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}
-      ${!has ? `<option selected>${esc(value)}</option>` : ''}
-    </select>`;
+  // 点选的选项 + 一个「其他」输入框（选项里没有时再手打）
+  const picker = (name, opts, value, placeholder, chips = {}) => {
+    const other = value && !opts.includes(value) ? value : '';
+    const dot = (o) => (chips[o] ? `<img class="dot" src="${esc(chips[o])}" alt="" referrerpolicy="no-referrer">` : '');
+    return `<div class="pick" role="radiogroup">
+      ${opts.map((o) => `<label><input type="radio" name="${name}" value="${esc(o)}" ${o === value ? 'checked' : ''}><span>${dot(o)}${esc(o)}</span></label>`).join('')}
+      <input type="text" name="${name}_other" value="${esc(other)}" placeholder="${placeholder}" aria-label="其他${name === 'size' ? '尺码' : '颜色'}">
+    </div>`;
   };
 
   slot.innerHTML = `
@@ -466,8 +469,8 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
           <select name="category">${CATEGORIES.map(([k, n]) => `<option value="${k}" ${entry.category === k ? 'selected' : ''}>${n}</option>`).join('')}</select>
         </label>
         <label class="field"><span>试穿日期</span><input type="date" name="triedAt" value="${esc(entry.triedAt || '')}"></label>
-        <label class="field"><span>颜色</span>${selectOrText('color', colorOpts, entry.color || '', '如 09 BLACK')}</label>
-        <label class="field"><span>试穿尺码</span>${selectOrText('size', sizeOpts, entry.size || '', '如 M')}</label>
+        <div class="field full"><span>颜色</span>${picker('color', colorOpts, entry.color || '', colorOpts.length ? '其他' : '如 09 BLACK', colorChips)}</div>
+        <div class="field full"><span>试穿尺码</span>${picker('size', sizeOpts, entry.size || '', '其他')}</div>
         <div class="field full"><span>尺码感受</span>${seg('fit', FIT, entry.fit)}</div>
         <div class="field full"><span>长度</span>${seg('length', LENGTH, entry.length)}</div>
         <div class="field"><span>评分</span>
@@ -506,16 +509,30 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
       const label = b.dataset.color;
       slot.querySelectorAll('.swatches button').forEach((x) => x.setAttribute('aria-pressed', x === b));
       slot.querySelector('#hero').innerHTML = b.innerHTML;
-      const el = form.color;
-      if (el.tagName === 'SELECT' && ![...el.options].some((o) => o.value === label)) el.add(new Option(label, label));
-      el.value = label;
+      const radio = [...form.querySelectorAll('input[name=color]')].find((r) => r.value === label);
+      if (radio) {
+        radio.checked = true;
+        form.color_other.value = '';
+      } else {
+        form.querySelectorAll('input[name=color]').forEach((r) => (r.checked = false));
+        form.color_other.value = label;
+      }
     }),
   );
-  form.color.addEventListener?.('change', () => {
-    const label = form.color.value;
-    const btn = [...slot.querySelectorAll('.swatches button')].find((x) => x.dataset.color === label);
-    btn?.click();
-  });
+
+  // 选了选项就清空「其他」，在「其他」里打字就取消选项
+  for (const name of ['color', 'size']) {
+    const other = form.elements[`${name}_other`];
+    form.querySelectorAll(`input[name=${name}]`).forEach((r) =>
+      r.addEventListener('change', () => {
+        other.value = '';
+        if (name === 'color') [...slot.querySelectorAll('.swatches button')].find((x) => x.dataset.color === r.value)?.click();
+      }),
+    );
+    other.addEventListener('input', () => {
+      if (other.value) form.querySelectorAll(`input[name=${name}]`).forEach((r) => (r.checked = false));
+    });
+  }
 
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -530,8 +547,8 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
       product,
       category: fd.get('category'),
       triedAt: fd.get('triedAt') || '',
-      color: fd.get('color') || '',
-      size: fd.get('size') || '',
+      color: fd.get('color') || String(fd.get('color_other') || '').trim(),
+      size: fd.get('size') || String(fd.get('size_other') || '').trim(),
       fit: fd.get('fit') || '',
       length: fd.get('length') || '',
       rating,

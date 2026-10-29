@@ -79,7 +79,7 @@ function timingSafeEqual(a, b) {
 async function productLookup(input, opts, ctx) {
   const parsed = parseProductInput(input);
   const cacheKey = new Request(
-    `https://cache.internal/product/${opts.region}/${opts.lang}/${parsed.productId}/${parsed.priceGroup || ''}`,
+    `https://cache.internal/v2/product/${opts.region}/${opts.lang}/${parsed.productId}/${parsed.priceGroup || ''}`,
   );
   const cache = caches.default;
   const hit = await cache.match(cacheKey);

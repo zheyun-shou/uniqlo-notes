@@ -3,8 +3,8 @@
 // 字段可能随时变化，所以解析一律做成“尽量取、取不到就留空”，
 // 接口失败时再退回解析商品页 HTML（og 标签 / JSON-LD）。
 
-const UA =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
+// 如实标明身份，不伪装成浏览器
+const UA = 'uniqlo-notes/0.1 (personal fit log; +https://github.com/zheyun-shou/uniqlo-notes)';
 
 /**
  * 把用户输入解析成商品编号。支持：
@@ -40,7 +40,6 @@ async function getJson(url, region) {
       headers: {
         'User-Agent': UA,
         Accept: 'application/json',
-        'x-fr-clientid': `uq.${region}.web-spa`,
       },
     });
   } catch (e) {

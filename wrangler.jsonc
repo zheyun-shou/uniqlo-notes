@@ -4,19 +4,18 @@
   "main": "src/worker.js",
   "compatibility_date": "2026-10-01",
 
-  // 前端静态文件；/api/* 和 /media/*（存档图片）先交给 Worker 处理
-  "assets": {
-    "directory": "./public",
-    "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/media/*"]
-  },
+  // 前端文件（public/）作为文本/二进制模块打包进 Worker，由 src/static.js 返回
+  "rules": [
+    { "type": "Text", "globs": ["**/*.html", "**/public/*.js", "**/*.css", "**/*.webmanifest", "**/*.svg"], "fallthrough": false },
+    { "type": "Data", "globs": ["**/*.png"], "fallthrough": false }
+  ],
 
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "uniqlo-fitlog",
-      // 运行 `npx wrangler d1 create uniqlo-fitlog` 后把输出的 id 填到这里
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      // 用 `npx wrangler d1 create uniqlo-fitlog` 创建
+      "database_id": "e0b5ad01-c2ac-4550-94a7-dfe1784c65c5",
       "migrations_dir": "migrations"
     }
   ],

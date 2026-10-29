@@ -1,8 +1,8 @@
 // 官网图片存档：把记录里引用的商品图复制一份到 R2，商品下架、官网删图后记录里的图依然能看。
 // 存档的 key 由原图地址的 SHA-256 决定，同一张图只存一次；前端优先显示存档，失败再回退官网原图。
 
-const UA =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
+// 如实标明身份，不伪装成浏览器
+const UA = 'uniqlo-notes/0.1 (personal fit log; +https://github.com/zheyun-shou/uniqlo-notes)';
 const MAX_BYTES = 8 * 1024 * 1024;
 
 // Workers 免费套餐每次请求最多 50 个外部子请求，一次最多处理这么多张，剩下的下次再存

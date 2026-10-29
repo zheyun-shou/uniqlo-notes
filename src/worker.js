@@ -1,5 +1,6 @@
 import { fetchUpstream, lookupProduct, parseProductInput } from './uniqlo.js';
 import { archiveBacklog, archiveEntry, archiveStatus, serveMedia } from './archive.js';
+import { serveStatic } from './static.js';
 
 const PRODUCT_CACHE_SECONDS = 60 * 60 * 24;
 
@@ -8,7 +9,7 @@ export default {
     const url = new URL(request.url);
     // 存档图片公开可读（<img> 无法带口令），内容都是官网公开商品图
     if (url.pathname.startsWith('/media/') && request.method === 'GET') return serveMedia(env, url.pathname.slice(7));
-    if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
+    if (!url.pathname.startsWith('/api/')) return serveStatic(url.pathname);
 
     try {
       const authError = checkAuth(request, env);

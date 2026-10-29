@@ -19,7 +19,7 @@
 ```
 public/        前端（原生 HTML/CSS/JS，无需构建；部署时打包进 Worker，由 src/static.js 返回）
 src/worker.js  API：鉴权、试穿记录增删改查、商品查询
-src/uniqlo.js  调用优衣库官网接口并整理数据
+src/uniqlo.js  读取优衣库官网商品页并整理数据
 src/archive.js 官网图片存档到 R2
 migrations/    D1（SQLite）表结构
 ```
@@ -97,14 +97,11 @@ npm test
 
 ## 查询不到商品时
 
-优衣库官网接口没有公开文档，这里调用的是官网前端自己用的 commerce v5 接口。查询顺序：
+Worker 请求官网商品页（`/{region}/{lang}/products/E465185-000/00`），读取页面里嵌入的 `window.__PRELOADED_STATE__` → `entity.pdpEntity` 中的商品数据，包括名称、分类面包屑、颜色、尺码、价格、材质和各颜色图片。读不到嵌入数据时，退回解析页面的 og 标签和 JSON-LD。
 
-1. `/{region}/api/commerce/v5/{lang}/products?productIds=E465185-000`
-2. 用 6 位数字搜索：`products?q=465185`（兼容 `-001` 之类的后缀）
-3. 详情接口，用来拿分类面包屑和材质
-4. 以上都失败时，解析商品页 HTML 里的 og 标签和 JSON-LD
+官网的 commerce 接口要求官网前端专用的客户端标识，这里不冒充，所以不用接口。请求时如实标明 User-Agent。
 
-如果字段名有变化，或者某个站点的接口不一样，可以用调试接口查看优衣库返回的原始数据：
+如果官网改版导致字段变化，可以用调试接口查看优衣库返回的原始数据：
 
 ```bash
 curl -H "Authorization: Bearer <APP_TOKEN>" https://<你的域名>/api/product/465185/raw

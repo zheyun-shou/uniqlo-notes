@@ -254,7 +254,7 @@ async function renderList() {
     app.innerHTML = `
       <div class="empty">
         <h2>还没有试穿记录</h2>
-        <p>点右下角的 ＋，输入吊牌或官网上的 6 位商品编号开始记录。</p>
+        <p>点下方的「＋ 记录」，输入商品编号或英文商品名开始记录。</p>
         <p><a class="btn primary" href="#/new">新建第一条</a></p>
       </div>`;
     return;

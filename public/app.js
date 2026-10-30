@@ -25,7 +25,7 @@ const FIT = { small: '偏小', true: '合适', large: '偏大' };
 const DEFAULT_SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
 const LENGTH = { short: '偏短', ok: '合适', long: '偏长' };
 const REGION_NAME = { se: '瑞典', uk: '英国', us: '美国', au: '澳大利亚', sg: '新加坡', jp: '日本', de: '德国', fr: '法国' };
-const VERDICT = { bought: '已购买', want: '想买', maybe: '再看看', pass: '不买' };
+const VERDICT = { bought: '已购买', want: '想买', totry: '想试', maybe: '再看看', pass: '不买' };
 
 const app = document.getElementById('app');
 const fab = document.getElementById('fab');

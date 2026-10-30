@@ -141,9 +141,11 @@ button.card { padding: 0; border: 0; background: none; text-align: left; cursor:
 .flag.bought { color: var(--text); }
 .flag.want { color: var(--accent); }
 .flag.maybe, .flag.pass { color: var(--muted); }
+.flag.totry { color: var(--text); }
 .badge { display: inline-block; padding: 2px 8px; font-size: 12px; border: 1px solid var(--line); color: var(--muted); }
 .badge.bought { background: var(--ink); border-color: var(--ink); color: var(--ink-text); font-weight: 700; }
 .badge.want { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.badge.totry { border-color: var(--line-strong); color: var(--text); }
 .stars { color: var(--text); letter-spacing: 1px; font-size: 12px; }
 .stars .off { color: var(--line); }
 

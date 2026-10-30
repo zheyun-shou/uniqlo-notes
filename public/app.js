@@ -185,6 +185,7 @@ const routes = [
   [/^#\/entry\/([^/]+)$/, (m) => renderDetail(m[1])],
   [/^#\/edit\/([^/]+)$/, (m) => renderEdit(m[1])],
   [/^#\/settings$/, renderSettings],
+  [/^#\/watch$/, renderWatch],
   [/^#?\/?$/, renderList],
 ];
 
@@ -609,7 +610,7 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
           <input type="text" name="store" value="${esc(entry.store || '')}" list="stores" placeholder="如 Drottninggatan">
           <datalist id="stores">${stores.map((s) => `<option value="${esc(s)}">`).join('')}</datalist>
         </label>
-        <div class="field full"><span>结论</span>${seg('verdict', VERDICT, entry.verdict)}</div>
+        <div class="field full" id="verdict-field"><span>结论 <b class="req">*</b></span>${seg('verdict', VERDICT, entry.verdict)}<p class="error" id="verdict-err" hidden>请选择结论</p></div>
         <label class="field"><span>原价（${esc(currency)}）</span><input type="number" name="originalPrice" value="${esc(originalPrice)}" min="0" step="any" inputmode="decimal"></label>
         <label class="field"><span>购买价（${esc(currency)}）</span><input type="number" name="paidPrice" value="${esc(paidPrice)}" min="0" step="any" inputmode="decimal"></label>
         <div class="field full"><label for="f-pros">喜欢的地方</label><textarea id="f-pros" name="pros" placeholder="版型、面料、颜色…">${esc(entry.pros || '')}</textarea>${phrases('pros')}</div>
@@ -671,6 +672,8 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
     sync();
   });
 
+  form.querySelectorAll('input[name=verdict]').forEach((r) => r.addEventListener('change', () => (form.querySelector('#verdict-err').hidden = true)));
+
   // 选了选项就清空「其他」，在「其他」里打字就取消选项
   for (const name of ['color', 'size']) {
     const other = form.elements[`${name}_other`];
@@ -688,6 +691,12 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const fd = new FormData(form);
+    // 结论必选
+    if (!fd.get('verdict')) {
+      form.querySelector('#verdict-err').hidden = false;
+      form.querySelector('#verdict-field').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     const product = { ...p };
     if (manual) {
       product.name = fd.get('p_name').trim();
@@ -786,6 +795,7 @@ async function renderDetail(id) {
               ${row('官网', p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">打开商品页 ↗</a>` : '')}
             </dl>
           </section>
+          ${canWatch(p) ? '<section class="panel" id="watch-panel"><h2>降价提醒</h2><p class="hint" style="margin:0">读取中…</p></section>' : ''}
           ${
             related.length
               ? `<section class="panel"><h2>同款其他试穿</h2><div class="related">${related
@@ -802,6 +812,9 @@ async function renderDetail(id) {
       </div>
     </article>`;
 
+  const wp = app.querySelector('#watch-panel');
+  if (wp) drawWatchPanel(wp, p);
+
   app.querySelector('#del').addEventListener('click', async () => {
     if (!confirm('确定删除这条试穿记录吗？')) return;
     try {
@@ -814,6 +827,162 @@ async function renderDetail(id) {
       toast(`删除失败：${err.message}`);
     }
   });
+}
+
+// ---------- 降价提醒 ----------
+
+// 只有本站官网查到的商品能跟踪价格（手动填写的、别国站点的不行）
+function canWatch(p) {
+  return p && p.source === 'api' && !p.region && /^[A-Z]\d{6}-\d{3}$/.test(p.productId || '');
+}
+
+// 「3 小时前检查」/「还没查过」
+function checkedText(ts) {
+  if (!ts) return '还没查过';
+  const m = Math.round((Date.now() - ts) / 60000);
+  const ago = m < 1 ? '刚刚' : m < 60 ? `${m} 分钟前` : m < 60 * 24 ? `${Math.round(m / 60)} 小时前` : `${Math.round(m / 60 / 24)} 天前`;
+  return `${ago}检查`;
+}
+
+// 详情页里的降价提醒：关注/取消关注，可设目标价
+async function drawWatchPanel(el, p) {
+  let w = null;
+  try {
+    w = (await api(`/watches/${encodeURIComponent(p.productId)}`)).watch;
+  } catch (e) {
+    if (e.status !== 404) {
+      el.innerHTML = `<h2>降价提醒</h2><p class="error">${esc(e.message)}</p>`;
+      return;
+    }
+  }
+  const cur = p.price?.currency || 'SEK';
+  el.innerHTML = `
+    <h2>降价提醒</h2>
+    ${
+      w
+        ? `<p style="margin:0 0 4px">已关注 · 最近价格 <b>${esc(price({ value: w.lastPrice, currency: w.currency || cur }))}</b>${
+            w.lowestPrice != null && w.lowestPrice < w.lastPrice ? `，最低到过 ${esc(price({ value: w.lowestPrice, currency: w.currency || cur }))}` : ''
+          }</p>
+           <p class="hint" style="margin:0 0 12px">${esc(checkedText(w.lastChecked))} · 降价时发邮件提醒（<a href="#/watch">管理</a>）</p>`
+        : '<p class="hint" style="margin:0 0 12px">关注后每隔几小时查一次官网价格，降价时发邮件提醒你。</p>'
+    }
+    <form class="lookup" id="watch-form">
+      <input type="number" name="target" min="0" step="any" inputmode="decimal" placeholder="目标价（可选，${esc(cur)}）" value="${esc(w?.targetPrice ?? '')}" aria-label="目标价">
+      <button class="btn ${w ? '' : 'primary'}">${w ? '保存' : '关注降价'}</button>
+    </form>
+    <p class="hint">${w ? '' : '不填目标价：只要比现在便宜就提醒；填了：降到目标价及以下才提醒。'}</p>
+    ${w ? '<div class="actions" style="justify-content:flex-start;margin-top:8px"><button class="btn danger" id="unwatch">取消关注</button></div>' : ''}`;
+
+  el.querySelector('#watch-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const target = ev.target.target.value;
+    try {
+      await api(`/watches/${encodeURIComponent(p.productId)}`, {
+        method: 'PUT',
+        body: { targetPrice: target, name: p.name, image: p.images?.[0]?.url, url: p.url, currency: p.price?.currency, price: p.price?.value, basePrice: p.basePrice?.value },
+      });
+      toast(w ? '已保存' : '已关注，降价时会发邮件');
+      drawWatchPanel(el, p);
+    } catch (e) {
+      toast(`失败：${e.message}`);
+    }
+  });
+  el.querySelector('#unwatch')?.addEventListener('click', async () => {
+    await api(`/watches/${encodeURIComponent(p.productId)}`, { method: 'DELETE' }).catch(() => {});
+    toast('已取消关注');
+    drawWatchPanel(el, p);
+  });
+}
+
+async function renderWatch() {
+  app.innerHTML = '<div class="page-head"><h1>降价提醒</h1></div><p class="hint">读取中…</p>';
+  const { watches, email } = await api('/watches');
+  const ready = email.to && email.keyConfigured;
+
+  app.innerHTML = `
+    <div class="page-head"><h1>降价提醒</h1><span class="count">${watches.length} 件</span></div>
+    <section class="panel">
+      <h2>提醒邮箱</h2>
+      <form class="lookup" id="email-form">
+        <input type="email" name="email" value="${esc(email.to || '')}" placeholder="you@example.com" autocomplete="email" required>
+        <button class="btn">保存</button>
+      </form>
+      ${
+        email.keyConfigured
+          ? `<p class="hint">邮件服务已设置。${email.to ? '<button class="btn" id="test-email" style="min-height:32px;padding:0 12px;margin-left:6px">发一封测试邮件</button>' : ''}</p>`
+          : `<p class="hint">还差一步：服务器还没有设置发信用的 <code>RESEND_API_KEY</code>（见 README「降价提醒」）。设置好之前只记录价格，不发邮件。</p>`
+      }
+      <p class="hint">Resend 免费账号没有绑定自己的域名时，只能发到注册 Resend 用的那个邮箱，这里请填同一个。</p>
+    </section>
+    <section class="panel">
+      <h2 style="display:flex;justify-content:space-between;align-items:center">关注的商品
+        ${watches.length ? '<button class="btn" id="check-now" style="min-height:32px;padding:0 12px">立即检查</button>' : ''}</h2>
+      ${
+        watches.length
+          ? `<div class="grid">${watches.map(watchCard).join('')}</div>
+             <p class="hint" style="margin-top:20px">每小时自动检查一批（每次 ${4} 件，轮流），关注得多时每件几小时查一次。${ready ? '' : '<b>邮件还没设置好，降价时暂时不会通知。</b>'}</p>`
+          : '<p class="hint" style="margin:0">还没有关注的商品。在任意一条试穿记录的详情页底部点「关注降价」。</p>'
+      }
+    </section>`;
+
+  app.querySelector('#email-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    try {
+      await api('/settings', { method: 'PUT', body: { alertEmail: ev.target.email.value.trim() } });
+      toast('已保存');
+      renderWatch();
+    } catch (e) {
+      toast(e.message);
+    }
+  });
+  app.querySelector('#test-email')?.addEventListener('click', async (ev) => {
+    ev.target.disabled = true;
+    try {
+      await api('/watches/test-email', { method: 'POST' });
+      toast('已发送，去邮箱看看（可能在垃圾邮件里）');
+    } catch (e) {
+      toast(`发送失败：${e.body?.error || e.message}`);
+    } finally {
+      ev.target.disabled = false;
+    }
+  });
+  app.querySelector('#check-now')?.addEventListener('click', async (ev) => {
+    ev.target.disabled = true;
+    ev.target.textContent = '检查中…';
+    try {
+      const r = await api('/watches/check', { method: 'POST', body: {} });
+      toast(r.notified ? `${r.notified} 件降价了${r.email?.ok ? '，已发邮件' : r.email ? `，邮件没发出去：${r.email.error}` : ''}` : `查了 ${r.checked.length} 件，没有新的降价`);
+      renderWatch();
+    } catch (e) {
+      toast(e.message);
+      ev.target.disabled = false;
+    }
+  });
+  app.querySelectorAll('[data-unwatch]').forEach((b) =>
+    b.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      await api(`/watches/${encodeURIComponent(b.dataset.unwatch)}`, { method: 'DELETE' }).catch(() => {});
+      toast('已取消关注');
+      renderWatch();
+    }),
+  );
+}
+
+function watchCard(w) {
+  const entry = (state.entries || []).find((e) => e.product?.productId === w.productId);
+  const href = entry ? `#/entry/${esc(entry.id)}` : esc(w.url || '#/watch');
+  return `
+    <a class="card" href="${href}" ${entry ? '' : 'target="_blank" rel="noopener"'}>
+      <div class="thumb">${w.image ? img(w.image, w.name) : ''}</div>
+      <div class="body">
+        <div class="cap">${esc(w.productId.replace(/^E/, '').replace(/-000$/, ''))}</div>
+        <div class="name">${esc(w.name || w.productId)}</div>
+        ${priceHtml(w.lastPrice, w.basePrice, w.currency)}
+        ${w.targetPrice != null ? `<div class="cap">目标价 ${esc(price({ value: w.targetPrice, currency: w.currency }))}${w.lastPrice != null && w.lastPrice <= w.targetPrice ? ' · <b style="color:var(--accent)">已达到</b>' : ''}</div>` : ''}
+        ${w.saleColors?.length ? `<div class="cap">降价颜色：${esc(w.saleColors.join('、'))}</div>` : ''}
+        <div class="meta"><span>${esc(checkedText(w.lastChecked))}</span><button type="button" class="linkish" data-unwatch="${esc(w.productId)}">取消关注</button></div>
+      </div>
+    </a>`;
 }
 
 // ---------- 设置 ----------

@@ -1,6 +1,7 @@
 import { fetchSearchPage, fetchUpstream, lookupProduct, parseProductInput, parseSearchResults } from './uniqlo.js';
 import { archiveBacklog, archiveEntry, archiveStatus, serveMedia } from './archive.js';
 import { serveStatic } from './static.js';
+import { checkWatches, emailStatus, getWatch, listWatches, removeWatch, sendEmail, setSetting, upsertWatch } from './watch.js';
 
 const PRODUCT_CACHE_SECONDS = 60 * 60 * 24;
 
@@ -20,12 +21,21 @@ export default {
       return json({ error: 'internal_error', message: String(e?.message || e) }, 500);
     }
   },
+
+  // 定时任务（wrangler.jsonc 的 triggers.crons）：检查降价
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(checkWatches(env, optsFrom(env)).then((r) => console.log('watch check', JSON.stringify(r))));
+  },
 };
+
+function optsFrom(env) {
+  return { region: env.UQ_REGION || 'se', lang: env.UQ_LANG || 'en', fallback: parseFallback(env.UQ_FALLBACK) };
+}
 
 async function route(request, env, ctx, url) {
   const parts = url.pathname.split('/').filter(Boolean).slice(1); // 去掉 "api"
   const method = request.method;
-  const opts = { region: env.UQ_REGION || 'se', lang: env.UQ_LANG || 'en', fallback: parseFallback(env.UQ_FALLBACK) };
+  const opts = optsFrom(env);
 
   if (parts[0] === 'ping' && method === 'GET') return json({ ok: true, region: opts.region, lang: opts.lang });
 
@@ -53,6 +63,40 @@ async function route(request, env, ctx, url) {
       return json({ url: page.url, status: page.status, length: page.html.length, results: parseSearchResults(page.html) });
     }
     return productSearch(q, opts, ctx);
+  }
+
+  if (parts[0] === 'watches') {
+    const id = parts[1] ? decodeURIComponent(parts[1]) : null;
+    if (!id && method === 'GET') return json({ watches: await listWatches(env), email: await emailStatus(env) });
+    if (id === 'check' && method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      const ids = Array.isArray(body.ids) ? body.ids.map(String).slice(0, 4) : null;
+      return json(await checkWatches(env, opts, { ids }));
+    }
+    if (id === 'test-email' && method === 'POST') {
+      const r = await sendEmail(env, {
+        subject: 'UNIQLO FITLOG 测试邮件',
+        html: '<div style="font-family:Helvetica,Arial,sans-serif"><b>UNIQLO FITLOG</b><p>收到这封邮件说明降价提醒的邮件设置没问题。</p></div>',
+      });
+      return json(r, r.ok ? 200 : 400);
+    }
+    if (id && !/^[A-Z]\d{6}-\d{3}$/.test(id)) return json({ error: 'bad_id', message: '商品编号格式不对' }, 400);
+    if (id && method === 'GET') {
+      const w = await getWatch(env, id);
+      return w ? json({ watch: w }) : json({ error: 'not_found' }, 404);
+    }
+    if (id && method === 'PUT') return json({ watch: await upsertWatch(env, id, await request.json().catch(() => ({}))) });
+    if (id && method === 'DELETE') return (await removeWatch(env, id)) ? json({ ok: true }) : json({ error: 'not_found' }, 404);
+  }
+
+  if (parts[0] === 'settings' && method === 'PUT') {
+    const body = await request.json().catch(() => ({}));
+    if ('alertEmail' in body) {
+      const v = String(body.alertEmail || '').trim();
+      if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return json({ error: 'bad_email', message: '邮箱格式不对' }, 400);
+      await setSetting(env, 'alert_email', v);
+    }
+    return json({ ok: true, email: await emailStatus(env) });
   }
 
   if (parts[0] === 'archive') {

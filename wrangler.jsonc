@@ -31,8 +31,13 @@
     "UQ_REGION": "se",
     "UQ_LANG": "en",
     // 本站查不到时同时去这些站点查（有的款只在别国官网上架，比如加长款），按顺序取第一个查到的
-    "UQ_FALLBACK": "uk/en,us/en,au/en,sg/en,jp/ja"
-  }
+    "UQ_FALLBACK": "uk/en,us/en,au/en,sg/en,jp/ja",
+    // 降价提醒邮件里「管理降价提醒」链接指向的地址
+    "APP_URL": "https://uniqlo-fitlog.uniqlo-fitlog.workers.dev"
+  },
 
-  // APP_TOKEN（访问口令）用 `npx wrangler secret put APP_TOKEN` 设置，不要写在这里
+  // 降价提醒：每小时查一批关注的商品（每次 4 件，按最久没查的轮流）
+  "triggers": { "crons": ["17 * * * *"] }
+
+  // APP_TOKEN（访问口令）、RESEND_API_KEY（降价提醒发邮件）用 `npx wrangler secret put` 或控制台设置，不要写在这里
 }

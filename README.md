@@ -118,8 +118,23 @@ curl -H "Authorization: Bearer <APP_TOKEN>" https://<你的域名>/api/product/4
 - Workers 免费套餐每次请求最多 50 个外部子请求，所以每次最多存 30 张。没存完或下载失败的，可以在「设置 → 官网图片存档」里点「补存剩下的图片」。
 - 删除记录不会删除已存档的图片（别的记录可能也在用）。
 
+## 降价提醒
+
+在试穿记录详情页底部点「关注降价」，可以填一个目标价（不填就是只要比现在便宜就提醒）。顶栏的铃铛是关注列表。
+
+- Worker 每小时运行一次定时任务（`triggers.crons`），每次查 4 件最久没查的商品。每件商品查 `/00` 和 `/01` 两个价格组：欧洲站的「Reduced Price」常常是单独的 `/01` 页面，只有部分颜色降价。
+- 降到比上次提醒时便宜（并且达到目标价，如果设了的话）就发一封邮件，同一次检查里的降价合并成一封。涨回去后会重新计算，下次再降还会提醒。
+- 只有本站官网查到的商品能关注。手动填写的、从别国站点查到的商品不能关注。
+
+邮件通过 [Resend](https://resend.com) 发送，免费额度每月 3000 封。设置步骤：
+
+1. 用你想收提醒的邮箱注册 Resend，在 API Keys 页面创建一个 key（权限选 Sending access 即可）。
+2. 打开 Cloudflare 控制台 → Workers & Pages → `uniqlo-fitlog` → Settings → Variables and Secrets，添加一个 **Secret**，名称 `RESEND_API_KEY`，值填刚才的 key。也可以用命令行：`npx wrangler secret put RESEND_API_KEY`。
+3. 在应用的「降价提醒」页填上同一个邮箱，点「发一封测试邮件」确认能收到。
+
+没有绑定自己域名的 Resend 账号只能用 `onboarding@resend.dev` 发信，并且只能发到注册时用的邮箱。想发到别的邮箱，需要在 Resend 验证一个自己的域名，再在 `wrangler.jsonc` 的 vars 里加 `"ALERT_FROM": "UNIQLO FITLOG <alerts@你的域名>"`。
+
 ## 可以继续加的功能
 
 - 上传自己的试穿照片（同样存 R2）
 - 记录身高体重和平时尺码，按款式统计「这类衣服我该选哪个码」
-- 想买清单降价提醒（Worker Cron 定时查价）

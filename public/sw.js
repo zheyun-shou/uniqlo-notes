@@ -1,5 +1,5 @@
 // 只缓存应用外壳和商品图片（官网原图和 /media/ 存档图）；/api/* 一律走网络（记录的离线副本由 app.js 存在 localStorage）。
-const VERSION = 'fitlog-v8';
+const VERSION = 'fitlog-v9';
 const SHELL = ['/', '/index.html', '/app.js', '/styles.css', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png'];
 
 self.addEventListener('install', (event) => {

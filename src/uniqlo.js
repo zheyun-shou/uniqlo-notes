@@ -320,3 +320,50 @@ export function parseSearchResults(html, max = 24) {
   }
   return out;
 }
+
+// ---------- 降价提醒用的价格查询 ----------
+
+// 欧洲站的「Reduced Price」常常是单独的 priceGroup（/01），和原价款（/00）是两个页面，所以两个都查
+const WATCH_PRICE_GROUPS = ['00', '01'];
+
+/**
+ * 查一个商品各 priceGroup 的当前售价。
+ * 返回 { found, upstreamDown, name, image, url, currency, base, min, groups: [{ priceGroup, price, base, colors }] }
+ */
+export async function fetchPrices(productId, opts) {
+  const groups = [];
+  let info = null;
+  let statuses = [];
+  for (const g of WATCH_PRICE_GROUPS) {
+    const r = await fetchUpstream(`/products/${productId}/${g}`, opts);
+    statuses.push(r.steps[0]?.status || 0);
+    if (!r.product) continue;
+    const p = normalizeApi(r.product, r.product, r.parsed, opts);
+    if (p.price?.value == null) continue;
+    info ||= p;
+    groups.push({
+      priceGroup: g,
+      price: p.price.value,
+      base: p.basePrice?.value ?? p.price.value,
+      currency: p.price.currency,
+      colors: p.colors.map((c) => `${c.code} ${c.name}`.trim()),
+      url: p.url,
+    });
+  }
+  if (!groups.length) {
+    const upstreamDown = statuses.every((s) => !s || s >= 500 || s === 403 || s === 429);
+    return { found: false, upstreamDown, groups };
+  }
+  const cheapest = groups.reduce((a, b) => (b.price < a.price ? b : a));
+  return {
+    found: true,
+    name: info.name,
+    image: info.images[0]?.url || null,
+    url: cheapest.url,
+    currency: cheapest.currency,
+    base: Math.max(...groups.map((g) => g.base)),
+    min: cheapest.price,
+    saleColors: cheapest.price < Math.max(...groups.map((g) => g.base)) ? cheapest.colors : [],
+    groups,
+  };
+}

@@ -57,14 +57,32 @@ export async function fetchUpstream(input, { region, lang }) {
 /**
  * 查询并整理成前端用的统一结构。
  * 返回 { product }；查不到时 product 为 null，upstreamDown 表示优衣库根本没正常响应（被拦截/宕机）。
+ * 本站没有的商品（比如只在门店卖、官网只在别国上架的加长款）会再去 opts.fallback 里的站点查，
+ * 查到的话 product.region 标明来源站点，外币价格只作参考（refPrice），不当作本地价格。
  */
 export async function lookupProduct(input, opts) {
+  const first = await lookupIn(input, opts);
+  if (first.product || first.upstreamDown || !first.parsed || !opts.fallback?.length) return first;
+  const others = await Promise.all(
+    opts.fallback.filter((o) => o.region !== opts.region).map((o) => lookupIn(input, o).then((r) => ({ ...r, o }))),
+  );
+  const hit = others.find((r) => r.product);
+  if (!hit) return first;
+  const { product } = hit;
+  product.region = hit.o.region;
+  product.refPrice = product.price ? { ...product.price, base: product.basePrice?.value ?? null, region: hit.o.region } : null;
+  product.price = null;
+  product.basePrice = null;
+  return { product };
+}
+
+async function lookupIn(input, opts) {
   const { parsed, product, meta, steps } = await fetchUpstream(input, opts);
-  if (!parsed) return { product: null };
-  if (product) return { product: normalizeApi(product, product, parsed, opts) };
-  if (meta?.name) return { product: normalizePage(meta, parsed, steps[0].url) };
+  if (!parsed) return { parsed, product: null };
+  if (product) return { parsed, product: normalizeApi(product, product, parsed, opts) };
+  if (meta?.name) return { parsed, product: normalizePage(meta, parsed, steps[0].url) };
   const upstreamDown = steps.every((s) => !s.status || s.status >= 500 || s.status === 403 || s.status === 429);
-  return { product: null, upstreamDown, statuses: steps.map((s) => `${s.name}:${s.status}`) };
+  return { parsed, product: null, upstreamDown, statuses: steps.map((s) => `${s.name}:${s.status}`) };
 }
 
 /**

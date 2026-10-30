@@ -29,7 +29,9 @@
   "vars": {
     // 优衣库站点：瑞典 = se；语言 en 或 sv
     "UQ_REGION": "se",
-    "UQ_LANG": "en"
+    "UQ_LANG": "en",
+    // 本站查不到时同时去这些站点查（有的款只在别国官网上架，比如加长款），按顺序取第一个查到的
+    "UQ_FALLBACK": "uk/en,us/en,au/en,sg/en,jp/ja"
   }
 
   // APP_TOKEN（访问口令）用 `npx wrangler secret put APP_TOKEN` 设置，不要写在这里

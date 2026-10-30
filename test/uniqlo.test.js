@@ -117,3 +117,27 @@ test('lookupProduct：商品页 404 时是“查不到”而不是 upstreamDown'
   assert.equal(r.product, null);
   assert.equal(r.upstreamDown, false);
 });
+
+test('lookupProduct：本站 404 时去 fallback 站点查，外币价格只作参考', async () => {
+  const html = readFileSync(new URL('./fixtures/pdp-E486817-000.html', import.meta.url), 'utf8');
+  const seen = [];
+  globalThis.fetch = async (url) => {
+    seen.push(String(url));
+    return String(url).includes('/us/en/') ? new Response(html, { status: 200 }) : new Response('nf', { status: 404 });
+  };
+  const fallback = [{ region: 'uk', lang: 'en' }, { region: 'us', lang: 'en' }];
+  const { product } = await lookupProduct('486817', { ...opts, fallback });
+  assert.equal(product.name, 'Hooded Blouson');
+  assert.equal(product.region, 'us');
+  assert.equal(product.price, null);
+  assert.deepEqual(product.refPrice, { value: 499, currency: 'SEK', base: 899, region: 'us' });
+  assert.match(product.url, /\/us\/en\/products\//);
+  assert.equal(seen.length, 3);
+});
+
+test('lookupProduct：所有站点都查不到时返回 null', async () => {
+  globalThis.fetch = async () => new Response('nf', { status: 404 });
+  const r = await lookupProduct('486817', { ...opts, fallback: [{ region: 'us', lang: 'en' }] });
+  assert.equal(r.product, null);
+  assert.equal(r.upstreamDown, false);
+});

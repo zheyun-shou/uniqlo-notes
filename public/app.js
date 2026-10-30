@@ -24,6 +24,7 @@ const FIT = { small: '偏小', true: '合适', large: '偏大' };
 // 官网没给出尺码列表时用的常见尺码
 const DEFAULT_SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
 const LENGTH = { short: '偏短', ok: '合适', long: '偏长' };
+const REGION_NAME = { se: '瑞典', uk: '英国', us: '美国', au: '澳大利亚', sg: '新加坡', jp: '日本', de: '德国', fr: '法国' };
 const VERDICT = { bought: '已购买', want: '想买', maybe: '再看看', pass: '不买' };
 
 const app = document.getElementById('app');
@@ -421,6 +422,14 @@ function numOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+// 从别国官网查到的商品：标明来源站点，外币价格只作参考
+function refPriceText(p) {
+  const r = p.refPrice;
+  if (!r) return '';
+  const now = price(r);
+  return r.base > r.value ? `${now}（原价 ${price({ value: r.base, currency: r.currency })}）` : now;
+}
+
 // 价格块：比原价便宜时折后价标红、原价划线，并标出折扣
 function priceHtml(paid, original, currency, cls = '') {
   const now = price({ value: paid, currency });
@@ -501,6 +510,7 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
             <span>${esc(p.productId)}</span>
             ${p.category?.length ? `<span>${esc(p.category.join(' › '))}</span>` : ''}
             ${priceHtml(p.price?.value, p.basePrice?.value, p.price?.currency)}
+            ${p.region ? `<span>本站官网没有上架，资料来自${esc(REGION_NAME[p.region] || p.region)}站${p.refPrice ? `，参考价 ${esc(refPriceText(p))}` : ''}</span>` : ''}
             ${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">官网页面 ↗</a>` : ''}
           </div>
           ${previous.length ? `<p class="hint">你之前试穿过这款 ${previous.length} 次：${previous.map((e) => `<a href="#/entry/${esc(e.id)}">${esc(e.triedAt || '')} ${esc(e.size || '')}</a>`).join('，')}</p>` : ''}
@@ -714,6 +724,8 @@ async function renderDetail(id) {
               ${row('编号', esc(p.productId))}
               ${row('官网分类', esc((p.category || []).join(' › ')))}
               ${row('官网价', esc(price(p.price)))}
+              ${row('资料来源', p.region ? `${esc(REGION_NAME[p.region] || p.region)}站官网` : '')}
+              ${row('参考价', esc(refPriceText(p)))}
               ${row('材质', esc(p.composition))}
               ${row('官网', p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">打开商品页 ↗</a>` : '')}
             </dl>

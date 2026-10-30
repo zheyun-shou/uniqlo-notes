@@ -25,14 +25,23 @@ export default {
 async function route(request, env, ctx, url) {
   const parts = url.pathname.split('/').filter(Boolean).slice(1); // 去掉 "api"
   const method = request.method;
-  const opts = { region: env.UQ_REGION || 'se', lang: env.UQ_LANG || 'en' };
+  const opts = { region: env.UQ_REGION || 'se', lang: env.UQ_LANG || 'en', fallback: parseFallback(env.UQ_FALLBACK) };
 
-  if (parts[0] === 'ping' && method === 'GET') return json({ ok: true, ...opts });
+  if (parts[0] === 'ping' && method === 'GET') return json({ ok: true, region: opts.region, lang: opts.lang });
 
   if (parts[0] === 'product' && parts[1] && method === 'GET') {
     const input = decodeURIComponent(parts[1]);
     if (!parseProductInput(input)) return json({ error: 'bad_id', message: '没有识别出 6 位商品编号' }, 400);
-    if (parts[2] === 'raw') return json(await fetchUpstream(input, opts));
+    // 调试用：?region=uk&lang=en 可以临时查别的站点
+    if (parts[2] === 'raw') {
+      const region = url.searchParams.get('region');
+      const lang = url.searchParams.get('lang');
+      const o = {
+        region: /^[a-z]{2}$/.test(region || '') ? region : opts.region,
+        lang: /^[a-z]{2}$/.test(lang || '') ? lang : opts.lang,
+      };
+      return json(await fetchUpstream(input, o));
+    }
     return productLookup(input, opts, ctx);
   }
 
@@ -76,10 +85,19 @@ function timingSafeEqual(a, b) {
 
 // ---------- 商品查询（带边缘缓存） ----------
 
+// "uk/en,us/en" → [{ region: 'uk', lang: 'en' }, ...]
+function parseFallback(s) {
+  return String(s || '')
+    .split(',')
+    .map((x) => x.trim().match(/^([a-z]{2})\/([a-z]{2})$/))
+    .filter(Boolean)
+    .map((m) => ({ region: m[1], lang: m[2] }));
+}
+
 async function productLookup(input, opts, ctx) {
   const parsed = parseProductInput(input);
   const cacheKey = new Request(
-    `https://cache.internal/v3/product/${opts.region}/${opts.lang}/${parsed.productId}/${parsed.priceGroup || ''}`,
+    `https://cache.internal/v4/product/${opts.region}/${opts.lang}/${parsed.productId}/${parsed.priceGroup || ''}`,
   );
   const cache = caches.default;
   const hit = await cache.match(cacheKey);
@@ -94,7 +112,11 @@ async function productLookup(input, opts, ctx) {
   }
   if (!product) {
     return json(
-      { error: 'not_found', message: `在优衣库 ${opts.region} 站点没有找到 ${parsed.productId}`, productId: parsed.productId },
+      {
+        error: 'not_found',
+        message: `在优衣库 ${[opts.region, ...opts.fallback.map((o) => o.region)].join(' / ')} 站点都没有找到 ${parsed.productId}`,
+        productId: parsed.productId,
+      },
       404,
     );
   }

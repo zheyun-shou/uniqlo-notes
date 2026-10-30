@@ -21,6 +21,12 @@ const CATEGORIES = [
 const CAT_NAME = Object.fromEntries(CATEGORIES.map(([k, n]) => [k, n]));
 
 const FIT = { small: '偏小', true: '合适', large: '偏大' };
+// 卡片上的小字说明用英文，和官网商品格子的风格一致
+const CAT_EN = {
+  inner: 'Innerwear', lounge: 'Loungewear', acc: 'Accessories', skirt: 'Skirts & Dresses', pants: 'Bottoms', down: 'Down & Padded',
+  outer: 'Outerwear', knit: 'Knitwear', sweat: 'Sweats & Fleece', tops: 'T-shirts & Tops', shirts: 'Shirts', other: 'Other',
+};
+const FIT_EN = { small: 'Runs small', true: 'True to size', large: 'Runs large' };
 // 官网没给出尺码列表时用的常见尺码
 const DEFAULT_SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
 const LENGTH = { short: '偏短', ok: '合适', long: '偏长' };
@@ -273,14 +279,12 @@ async function renderList() {
 
   app.innerHTML = `
     <div class="page-head"><h1>我的试穿</h1><span class="count" id="count"></span></div>
-    <div class="toolbar">
-      <input class="search" type="search" placeholder="搜索名称、编号、备注…" value="${esc(f.q)}" aria-label="搜索">
-      <div class="tabs" role="group" aria-label="分类">
-        ${chip('cat', 'all', '全部')}
-        ${CATEGORIES.filter(([k]) => catCounts[k]).map(([k, n]) => chip('cat', k, n, catCounts[k])).join('')}
-      </div>
+    <input class="search" type="search" placeholder="搜索名称、编号、备注…" value="${esc(f.q)}" aria-label="搜索">
+    <div class="tabs" role="group" aria-label="分类">
+      ${chip('cat', 'all', '全部')}
+      ${CATEGORIES.filter(([k]) => catCounts[k]).map(([k, n]) => chip('cat', k, n, catCounts[k])).join('')}
     </div>
-    <div class="filters" role="group" aria-label="结论" style="margin:-4px 0 20px">
+    <div class="filters" role="group" aria-label="结论" style="margin:0 0 20px">
       ${chip('verdict', 'all', '所有结论')}
       ${Object.entries(VERDICT).filter(([k]) => verdictCounts[k]).map(([k, n]) => chip('verdict', k, n, verdictCounts[k])).join('')}
     </div>
@@ -320,7 +324,7 @@ async function renderList() {
 
 function cardHtml(e) {
   const p = e.product || {};
-  const cap = [CAT_NAME[e.category], e.size && `试穿 ${e.size}`, e.fit && FIT[e.fit]].filter(Boolean).join(' · ');
+  const cap = [CAT_EN[e.category], e.size, FIT_EN[e.fit]].filter(Boolean).join(' · ');
   return `
     <a class="card" href="#/entry/${esc(e.id)}">
       <div class="thumb">${img(heroImage(e), p.name)}</div>

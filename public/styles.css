@@ -85,12 +85,11 @@ main { max-width: 1080px; margin: 0 auto; padding: 0 16px 16px; }
 .page-head h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: .04em; }
 .page-head .count { color: var(--muted); font-size: 13px; }
 
-.toolbar { display: flex; flex-direction: column; gap: 0; margin-bottom: 16px; }
 .search {
   width: 100%; height: 44px; padding: 0 14px 0 40px;
   border: 1px solid var(--line); background: var(--bg) no-repeat 13px 50% / 18px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237d7d7d' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E");
-  margin: 8px 0 4px;
+  margin: 12px 0 8px;
 }
 
 /* 分类：下划线标签页 */
@@ -267,9 +266,6 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--l
 @media (min-width: 720px) {
   main { padding: 0 32px 32px; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 36px 16px; }
-  .toolbar { flex-direction: row-reverse; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--line); }
-  .toolbar .tabs { border-bottom: 0; }
-  .toolbar .search { max-width: 260px; margin: 0; }
   .detail-hero { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 40px; padding-top: 16px; }
   .gallery { margin: 0; display: grid; grid-template-columns: 1fr 1fr; overflow: visible; }
   .gallery img { width: 100%; }

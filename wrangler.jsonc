@@ -7,7 +7,7 @@
   // 前端文件（public/）作为文本/二进制模块打包进 Worker，由 src/static.js 返回
   "rules": [
     { "type": "Text", "globs": ["**/*.html", "**/public/*.js", "**/*.css", "**/*.webmanifest", "**/*.svg"], "fallthrough": false },
-    { "type": "Data", "globs": ["**/*.png"], "fallthrough": false }
+    { "type": "Data", "globs": ["**/*.png", "**/*.woff2"], "fallthrough": false }
   ],
 
   "d1_databases": [

@@ -4,20 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>UNIQLO FITLOG</title>
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#b2c7ab" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#6a0c06" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="FITLOG">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="preload" href="/fonts/space-grotesk.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/styles.css">
+  <script>try { var t = localStorage.getItem('fitlog.theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 </head>
 <body>
   <header class="topbar">
     <a href="#/" class="brand" aria-label="UNIQLO FITLOG home">UNIQLO FITLOG</a>
     <nav>
+      <button type="button" class="theme-btn" id="theme-btn" aria-label="Switch light or dark theme"><span>Light</span><i></i></button>
       <a href="#/watch" class="icon-btn" aria-label="Price alerts">
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M10 21h4"/></svg>
       </a>
@@ -28,7 +31,7 @@
   </header>
   <main id="app" aria-live="polite"></main>
   <a href="#/new" class="fab" id="fab" aria-label="Add an item">
-    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4"/></svg>
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.6"/></svg>
     <span>Add</span>
   </a>
   <div id="toast" class="toast" role="status" hidden></div>

@@ -1,6 +1,6 @@
 // 只缓存应用外壳和商品图片（官网原图和 /media/ 存档图）；/api/* 一律走网络（记录的离线副本由 app.js 存在 localStorage）。
-const VERSION = 'fitlog-v13';
-const SHELL = ['/', '/index.html', '/app.js', '/styles.css', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png'];
+const VERSION = 'fitlog-v14';
+const SHELL = ['/', '/index.html', '/app.js', '/styles.css', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png', '/fonts/space-grotesk.woff2'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

@@ -49,6 +49,11 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
+// 页面大标题：小号大写前缀 + 小写粗体加句点
+function pageHead(eyebrow, title, extra = '') {
+  return `<div class="page-head"><div><p class="eyebrow">${esc(eyebrow)}</p><h1>${esc(title)}.</h1></div>${extra}</div>`;
+}
+
 function today() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -248,13 +253,14 @@ function renderLogin() {
 // ---------- 列表 ----------
 
 async function renderList() {
-  app.innerHTML = `<div class="page-head"><h1>My Closet</h1></div><div class="grid" style="margin-top:16px">${'<div class="card"><div class="thumb skeleton"></div><div class="body"><div class="skeleton" style="height:14px"></div></div></div>'.repeat(4)}</div>`;
+  app.innerHTML = `${pageHead('My', 'closet')}<div class="grid" style="margin-top:16px">${'<div class="card"><div class="thumb skeleton"></div><div class="body"><div class="skeleton" style="height:14px"></div></div></div>'.repeat(4)}</div>`;
   const entries = await loadEntries();
 
   if (!entries.length) {
     app.innerHTML = `
       <div class="empty">
-        <h2>Your closet is empty</h2>
+        <p class="eyebrow">Your closet is</p>
+        <h2>empty.</h2>
         <p>Tap “+ Add” below and enter a product number or English product name.</p>
         <p><a class="btn primary" href="#/new">Add your first item</a></p>
       </div>`;
@@ -272,7 +278,7 @@ async function renderList() {
     `<button class="chip" data-group="${group}" data-key="${key}" aria-pressed="${f[group] === key}">${esc(label)}${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
 
   app.innerHTML = `
-    <div class="page-head"><h1>My Closet</h1><span class="count" id="count"></span></div>
+    ${pageHead('My', 'closet', '<span class="count" id="count"></span>')}
     <input class="search" type="search" placeholder="Search my closet and uniqlo.com…" value="${esc(f.q)}" aria-label="Search">
     <div class="tabs" role="group" aria-label="Category">
       ${chip('cat', 'all', 'All')}
@@ -393,6 +399,7 @@ function cardHtml(e) {
 async function renderNew(prefill) {
   app.innerHTML = `
     <a class="back" href="#/">‹ Back</a>
+    ${pageHead('Add a new', 'item')}
     <section class="panel">
       <h2>Find a product</h2>
       <form id="lookup" class="lookup">
@@ -981,13 +988,13 @@ async function watchAll(list) {
 }
 
 async function renderWatch() {
-  app.innerHTML = '<div class="page-head"><h1>Price Alerts</h1></div><p class="hint">Loading…</p>';
+  app.innerHTML = `${pageHead('Price', 'alerts')}<p class="hint">Loading…</p>`;
   const [{ watches, email }] = await Promise.all([api('/watches'), loadEntries().catch(() => [])]);
   const ready = email.to && email.keyConfigured;
   const pending = wantToWatch(watches);
 
   app.innerHTML = `
-    <div class="page-head"><h1>Price Alerts</h1><span class="count">${watches.length} ${watches.length === 1 ? 'item' : 'items'}</span></div>
+    ${pageHead('Price', 'alerts', `<span class="count">${watches.length} ${watches.length === 1 ? 'item' : 'items'}</span>`)}
     <section class="panel">
       <h2>Alert email</h2>
       <form class="lookup" id="email-form">
@@ -1097,6 +1104,7 @@ async function renderSettings() {
 
   app.innerHTML = `
     <a class="back" href="#/">‹ Back</a>
+    ${pageHead('Your', 'settings')}
     <section class="panel">
       <h2>Overview</h2>
       <div class="stats">
@@ -1200,6 +1208,25 @@ async function renderSettings() {
 }
 
 // ---------- 启动 ----------
+
+// 浅色/深色切换：默认跟随系统，点一下改成另一种并记住
+const themeBtn = document.getElementById('theme-btn');
+const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+function drawThemeBtn() {
+  const mode = document.documentElement.dataset.theme || (darkQuery.matches ? 'dark' : 'light');
+  themeBtn.dataset.mode = mode;
+  themeBtn.querySelector('span').textContent = mode === 'dark' ? 'Dark' : 'Light';
+  const color = mode === 'dark' ? '#6a0c06' : '#b2c7ab';
+  document.querySelectorAll('meta[name=theme-color]').forEach((m) => m.setAttribute('content', color));
+}
+themeBtn.addEventListener('click', () => {
+  const next = themeBtn.dataset.mode === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  safeSet('fitlog.theme', next);
+  drawThemeBtn();
+});
+darkQuery.addEventListener('change', drawThemeBtn);
+drawThemeBtn();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});

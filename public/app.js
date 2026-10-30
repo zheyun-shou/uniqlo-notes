@@ -668,7 +668,7 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
       upsertLocal(res.entry);
       toast('已保存');
       // 新建完回到「我的试穿」列表；编辑完回到这条记录的详情
-      location.hash = editing ? `#/entry/${res.entry.id}` : "#/";
+      location.hash = editing ? `#/entry/${res.entry.id}` : '#/';
     } catch (e) {
       err.hidden = false;
       err.textContent = `保存失败：${e.message}`;

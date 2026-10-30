@@ -25,7 +25,7 @@ test('decide：没有基准时只在达到目标价时提醒', () => {
 test('dropEmail：标题和内容包含价格、原价、降价颜色、链接，并转义 HTML', () => {
   const drops = [{ w: { name: 'Baggy <Jeans>', target_price: null }, r: { name: 'Baggy <Jeans>', min: 399, base: 599, currency: 'SEK', saleColors: ['00 WHITE'], url: 'https://www.uniqlo.com/se/en/products/E479000-001/01', image: 'https://image.uniqlo.com/x.jpg' } }];
   const { subject, html } = dropEmail(drops, 'https://app.example');
-  assert.match(subject, /^降价提醒：Baggy <Jeans> 现在 399/);
+  assert.match(subject, /^Price drop: Baggy <Jeans> is now 399/);
   assert.match(html, /Baggy &lt;Jeans&gt;/);
   assert.match(html, /-33%/);
   assert.match(html, /00 WHITE/);

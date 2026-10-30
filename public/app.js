@@ -5,33 +5,27 @@ const CACHE_KEY = 'fitlog.entries';
 
 const CATEGORIES = [
   // [key, 名称, 匹配优衣库分类/商品名的关键词（英文+瑞典语）]
-  ['inner', '内衣/AIRism/HEATTECH', /innerwear|underwear|underkläder|\bbra\b|boxer|briefs|socks|strumpor/i],
-  ['lounge', '家居服', /lounge|pajama|pyjamas|room ?wear|sleepwear|relaco/i],
-  ['acc', '配饰/鞋包', /\bbags?\b|väska|\bhats?\b|\bcaps?\b|mössa|scarf|halsduk|gloves?|vantar|belts?|bälte|shoes|skor|accessor/i],
-  ['skirt', '裙子/连衣裙', /skirts?|kjol|\bdress(es)?\b(?!\s*shirt)|klänning/i],
-  ['pants', '裤子', /pants|trousers|byxa|byxor|jeans|chinos?|\bshorts\b|joggers?|leggings/i],
-  ['down', '羽绒/棉服', /(?<![-\w])down\b|\bdun\b|puffer|padded|vadderad/i],
-  ['outer', '外套/夹克', /jackets?|jacka|coats?|kappa|blousons?|\brock\b|blazer|parka|outerwear|ytterkläder|\bvests?\b|väst|gilet/i],
-  ['knit', '针织/毛衣', /knit|sweaters?|cardigan|stickad|kofta|merino|cashmere|kashmir/i],
-  ['sweat', '卫衣/抓绒', /sweatshirt|sweat|hoodie|huvtröja|fleece/i],
-  ['tops', 'T恤/上衣', /t-?shirts?|\btees?\b|\btops?\b|topp|polo|tank|linne|airism|heattech/i],
-  ['shirts', '衬衫', /shirts?|skjorta|blouse|blus/i],
-  ['other', '其他', null],
+  ['inner', 'Innerwear', /innerwear|underwear|underkläder|\bbra\b|boxer|briefs|socks|strumpor/i],
+  ['lounge', 'Loungewear', /lounge|pajama|pyjamas|room ?wear|sleepwear|relaco/i],
+  ['acc', 'Accessories', /\bbags?\b|väska|\bhats?\b|\bcaps?\b|mössa|scarf|halsduk|gloves?|vantar|belts?|bälte|shoes|skor|accessor/i],
+  ['skirt', 'Skirts & Dresses', /skirts?|kjol|\bdress(es)?\b(?!\s*shirt)|klänning/i],
+  ['pants', 'Bottoms', /pants|trousers|byxa|byxor|jeans|chinos?|\bshorts\b|joggers?|leggings/i],
+  ['down', 'Down & Padded', /(?<![-\w])down\b|\bdun\b|puffer|padded|vadderad/i],
+  ['outer', 'Outerwear', /jackets?|jacka|coats?|kappa|blousons?|\brock\b|blazer|parka|outerwear|ytterkläder|\bvests?\b|väst|gilet/i],
+  ['knit', 'Knitwear', /knit|sweaters?|cardigan|stickad|kofta|merino|cashmere|kashmir/i],
+  ['sweat', 'Sweats & Fleece', /sweatshirt|sweat|hoodie|huvtröja|fleece/i],
+  ['tops', 'T-shirts & Tops', /t-?shirts?|\btees?\b|\btops?\b|topp|polo|tank|linne|airism|heattech/i],
+  ['shirts', 'Shirts', /shirts?|skjorta|blouse|blus/i],
+  ['other', 'Other', null],
 ];
 const CAT_NAME = Object.fromEntries(CATEGORIES.map(([k, n]) => [k, n]));
 
-const FIT = { small: '偏小', true: '合适', large: '偏大' };
-// 卡片上的小字说明用英文，和官网商品格子的风格一致
-const CAT_EN = {
-  inner: 'Innerwear', lounge: 'Loungewear', acc: 'Accessories', skirt: 'Skirts & Dresses', pants: 'Bottoms', down: 'Down & Padded',
-  outer: 'Outerwear', knit: 'Knitwear', sweat: 'Sweats & Fleece', tops: 'T-shirts & Tops', shirts: 'Shirts', other: 'Other',
-};
-const FIT_EN = { small: 'Runs small', true: 'True to size', large: 'Runs large' };
+const FIT = { small: 'Runs small', true: 'True to size', large: 'Runs large' };
 // 官网没给出尺码列表时用的常见尺码
 const DEFAULT_SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
-const LENGTH = { short: '偏短', ok: '合适', long: '偏长' };
-const REGION_NAME = { se: '瑞典', uk: '英国', us: '美国', au: '澳大利亚', sg: '新加坡', jp: '日本', de: '德国', fr: '法国' };
-const VERDICT = { bought: '已购买', want: '想买', totry: '想试', maybe: '再看看', pass: '不买' };
+const LENGTH = { short: 'Too short', ok: 'Just right', long: 'Too long' };
+const REGION_NAME = { se: 'Sweden', uk: 'UK', us: 'US', au: 'Australia', sg: 'Singapore', jp: 'Japan', de: 'Germany', fr: 'France' };
+const VERDICT = { bought: 'Bought', want: 'Want', totry: 'To try', maybe: 'Maybe', pass: 'Pass' };
 
 const app = document.getElementById('app');
 const fab = document.getElementById('fab');
@@ -63,7 +57,7 @@ function today() {
 function stars(n) {
   n = Number(n) || 0;
   if (!n) return '';
-  return `<span class="stars" aria-label="${n} 星">${'★'.repeat(n)}<span class="off">${'★'.repeat(5 - n)}</span></span>`;
+  return `<span class="stars" aria-label="${n} stars">${'★'.repeat(n)}<span class="off">${'★'.repeat(5 - n)}</span></span>`;
 }
 
 function price(p) {
@@ -131,7 +125,7 @@ function heroImage(entry) {
 
 class ApiError extends Error {
   constructor(status, body) {
-    super(body?.message || `请求失败（${status}）`);
+    super(body?.message || `Request failed (${status})`);
     this.status = status;
     this.body = body;
   }
@@ -169,7 +163,7 @@ async function loadEntries(force = false) {
     const cached = safeGet(CACHE_KEY);
     if (!cached) throw e;
     state.entries = JSON.parse(cached);
-    toast('离线中，显示的是上次同步的记录');
+    toast('Offline — showing your last synced records');
   }
   return state.entries;
 }
@@ -209,7 +203,7 @@ async function router() {
       try {
         await fn(m);
       } catch (e) {
-        if (e.status !== 401) app.innerHTML = `<div class="empty"><h2>出错了</h2><p>${esc(e.message)}</p><p><a class="btn" href="#/">回到首页</a></p></div>`;
+        if (e.status !== 401) app.innerHTML = `<div class="empty"><h2>Something went wrong</h2><p>${esc(e.message)}</p><p><a class="btn" href="#/">Back to home</a></p></div>`;
       }
       return;
     }
@@ -224,11 +218,11 @@ function renderLogin() {
   fab.hidden = true;
   app.innerHTML = `
     <section class="panel" style="max-width:420px;margin:40px auto">
-      <h2>输入访问口令</h2>
-      <p class="hint" style="margin:0 0 12px">口令就是部署时用 <code>wrangler secret put APP_TOKEN</code> 设置的值，只保存在这台设备上。</p>
+      <h2>Enter access token</h2>
+      <p class="hint" style="margin:0 0 12px">The value set with <code>wrangler secret put APP_TOKEN</code> when deploying. It is only stored on this device.</p>
       <form id="login" class="lookup">
         <input type="password" name="token" placeholder="APP_TOKEN" autocomplete="current-password" required>
-        <button class="btn primary">进入</button>
+        <button class="btn primary">Enter</button>
       </form>
       <p class="error" id="err" hidden></p>
     </section>`;
@@ -244,7 +238,7 @@ function renderLogin() {
       location.hash = '#/';
     } catch (e) {
       err.hidden = false;
-      err.textContent = e.status === 401 ? '口令不正确' : e.message;
+      err.textContent = e.status === 401 ? 'Wrong token' : e.message;
       if (e.status === 401) location.hash = '#/login';
     }
   });
@@ -254,15 +248,15 @@ function renderLogin() {
 // ---------- 列表 ----------
 
 async function renderList() {
-  app.innerHTML = `<div class="page-head"><h1>我的试穿</h1></div><div class="grid" style="margin-top:16px">${'<div class="card"><div class="thumb skeleton"></div><div class="body"><div class="skeleton" style="height:14px"></div></div></div>'.repeat(4)}</div>`;
+  app.innerHTML = `<div class="page-head"><h1>My Try-Ons</h1></div><div class="grid" style="margin-top:16px">${'<div class="card"><div class="thumb skeleton"></div><div class="body"><div class="skeleton" style="height:14px"></div></div></div>'.repeat(4)}</div>`;
   const entries = await loadEntries();
 
   if (!entries.length) {
     app.innerHTML = `
       <div class="empty">
-        <h2>还没有试穿记录</h2>
-        <p>点下方的「＋ 记录」，输入商品编号或英文商品名开始记录。</p>
-        <p><a class="btn primary" href="#/new">新建第一条</a></p>
+        <h2>No try-ons yet</h2>
+        <p>Tap “+ Add” below and enter a product number or English product name.</p>
+        <p><a class="btn primary" href="#/new">Add your first one</a></p>
       </div>`;
     return;
   }
@@ -278,19 +272,38 @@ async function renderList() {
     `<button class="chip" data-group="${group}" data-key="${key}" aria-pressed="${f[group] === key}">${esc(label)}${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
 
   app.innerHTML = `
-    <div class="page-head"><h1>我的试穿</h1><span class="count" id="count"></span></div>
-    <input class="search" type="search" placeholder="搜索名称、编号、备注…" value="${esc(f.q)}" aria-label="搜索">
-    <div class="tabs" role="group" aria-label="分类">
-      ${chip('cat', 'all', '全部')}
+    <div class="page-head"><h1>My Try-Ons</h1><span class="count" id="count"></span></div>
+    <input class="search" type="search" placeholder="Search my try-ons and uniqlo.com…" value="${esc(f.q)}" aria-label="Search">
+    <div class="tabs" role="group" aria-label="Category">
+      ${chip('cat', 'all', 'All')}
       ${CATEGORIES.filter(([k]) => catCounts[k]).map(([k, n]) => chip('cat', k, n, catCounts[k])).join('')}
     </div>
-    <div class="filters" role="group" aria-label="结论" style="margin:0 0 20px">
-      ${chip('verdict', 'all', '所有结论')}
+    <div class="filters" role="group" aria-label="Verdict" style="margin:0 0 20px">
+      ${chip('verdict', 'all', 'All verdicts')}
       ${Object.entries(VERDICT).filter(([k]) => verdictCounts[k]).map(([k, n]) => chip('verdict', k, n, verdictCounts[k])).join('')}
     </div>
-    <div class="grid" id="grid"></div>`;
+    <div class="want-bar" id="want-bar" hidden><span class="hint">Get an email when any of these drops in price</span><button class="btn primary" id="watch-want">Watch all prices</button></div>
+    <div class="grid" id="grid"></div>
+    <section id="online" hidden></section>`;
 
   const grid = app.querySelector('#grid');
+  const wantBar = app.querySelector('#want-bar');
+  wantBar.querySelector('#watch-want').addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Adding…';
+    try {
+      const { watches } = await api('/watches');
+      const list = wantToWatch(watches);
+      const ok = await watchAll(list);
+      toast(list.length ? `Watching ${ok} more item${ok === 1 ? '' : 's'}` : 'All “Want” items are already watched');
+    } catch (e) {
+      toast(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Watch all prices';
+    }
+  });
   const draw = () => {
     const q = f.q.trim().toLowerCase();
     const list = entries.filter((e) => {
@@ -302,17 +315,53 @@ async function renderList() {
         .toLowerCase();
       return hay.includes(q);
     });
-    app.querySelector('#count').textContent = `${list.length} 件`;
+    app.querySelector('#count').textContent = `${list.length} ${list.length === 1 ? 'item' : 'items'}`;
+    wantBar.hidden = f.verdict !== 'want';
     grid.innerHTML = list.length
       ? list.map(cardHtml).join('')
-      : `<p class="empty" style="grid-column:1/-1">没有符合条件的记录</p>`;
+      : `<p class="empty" style="grid-column:1/-1;padding:32px 16px">${q ? 'No matching try-ons' : 'No try-ons in this filter'}</p>`;
   };
   draw();
 
-  app.querySelector('.search').addEventListener('input', (ev) => {
+  // 同时在 uniqlo.com 搜索：停止输入一会儿再搜，回车立即搜；点结果直接去记录
+  const online = app.querySelector('#online');
+  let timer;
+  let seq = 0;
+  const searchOnline = async (q) => {
+    clearTimeout(timer);
+    const my = ++seq;
+    if (q.length < 2) {
+      online.hidden = true;
+      return;
+    }
+    online.hidden = false;
+    online.innerHTML = `<h2 class="online-head">On uniqlo.com</h2><div class="grid">${'<div class="card"><div class="thumb skeleton"></div></div>'.repeat(4)}</div>`;
+    try {
+      const { results, region, fallback } = await api(`/search?q=${encodeURIComponent(q)}`);
+      if (my !== seq) return;
+      online.innerHTML = `<h2 class="online-head">On uniqlo.com <span class="hint">${
+        results.length ? `${results.length} results${fallback ? ` · from the ${esc(REGION_NAME[region] || region)} site` : ''}` : ''
+      }</span></h2>${results.length ? resultCardsHtml(results) : `<p class="hint">No results for “${esc(q)}” on uniqlo.com.</p>`}`;
+      online.querySelectorAll('.result').forEach((b) =>
+        b.addEventListener('click', () => {
+          location.hash = `#/new/${encodeURIComponent(`/products/${b.dataset.id}/${b.dataset.pg}`)}`;
+        }),
+      );
+    } catch (e) {
+      if (my === seq && e.status !== 401) online.innerHTML = `<h2 class="online-head">On uniqlo.com</h2><p class="error">${esc(e.message)}</p>`;
+    }
+  };
+  const searchBox = app.querySelector('.search');
+  searchBox.addEventListener('input', (ev) => {
     f.q = ev.target.value;
     draw();
+    clearTimeout(timer);
+    timer = setTimeout(() => searchOnline(f.q.trim()), 700);
   });
+  searchBox.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') searchOnline(f.q.trim());
+  });
+  if (f.q.trim()) searchOnline(f.q.trim());
   app.querySelectorAll('.chip').forEach((b) =>
     b.addEventListener('click', () => {
       f[b.dataset.group] = b.dataset.key;
@@ -324,7 +373,7 @@ async function renderList() {
 
 function cardHtml(e) {
   const p = e.product || {};
-  const cap = [CAT_EN[e.category], e.size, FIT_EN[e.fit]].filter(Boolean).join(' · ');
+  const cap = [CAT_NAME[e.category], e.size, FIT[e.fit]].filter(Boolean).join(' · ');
   return `
     <a class="card" href="#/entry/${esc(e.id)}">
       <div class="thumb">${img(heroImage(e), p.name)}</div>
@@ -343,14 +392,14 @@ function cardHtml(e) {
 
 async function renderNew(prefill) {
   app.innerHTML = `
-    <a class="back" href="#/">‹ 返回</a>
+    <a class="back" href="#/">‹ Back</a>
     <section class="panel">
-      <h2>查询商品</h2>
+      <h2>Find a product</h2>
       <form id="lookup" class="lookup">
-        <input type="text" name="pid" inputmode="text" placeholder="6 位编号、官网链接或商品名称" value="${esc(prefill)}" required autocomplete="off">
-        <button class="btn primary" id="go">查询</button>
+        <input type="text" name="pid" inputmode="text" placeholder="6-digit number, product link or name" value="${esc(prefill.replace(/^\/products\/([^/]+)\/\d{2}$/, '$1'))}" required autocomplete="off">
+        <button class="btn primary" id="go">Search</button>
       </form>
-      <p class="hint">编号在吊牌上（“Art. No.”/商品编号）或官网商品页里；也可以输入英文商品名，如 baggy barrel leg jeans。</p>
+      <p class="hint">The number is on the tag (“Art. No.”) or the product page. You can also type an English product name, e.g. baggy barrel leg jeans.</p>
       <p class="error" id="err" hidden></p>
     </section>
     <div id="form-slot"></div>`;
@@ -362,7 +411,7 @@ async function renderNew(prefill) {
 
   const busy = (on) => {
     go.disabled = on;
-    go.textContent = on ? '查询中…' : '查询';
+    go.textContent = on ? 'Searching…' : 'Search';
   };
 
   // 按编号/链接查询
@@ -383,8 +432,8 @@ async function renderNew(prefill) {
       slot.innerHTML = '';
       if (e.status === 404 || e.status >= 500) {
         slot.innerHTML = `<section class="panel">
-            ${e.status === 404 ? '<p style="margin:0 0 10px">吊牌上的编号有时和官网的不一样，可以在上面输入英文商品名搜索。</p>' : ''}
-            <p style="margin:0 0 10px">也可以手动记录：</p><button class="btn" id="manual">手动填写商品信息</button></section>`;
+            ${e.status === 404 ? '<p style="margin:0 0 10px">Tag numbers sometimes differ from the website. Try searching by the English product name above.</p>' : ''}
+            <p style="margin:0 0 10px">Or log it manually:</p><button class="btn" id="manual">Enter product details manually</button></section>`;
         slot.querySelector('#manual').addEventListener('click', () =>
           renderForm(slot, {
             product: { productId: e.body?.productId || (code ? `E${code}-000` : input), code, name: '', category: [], images: [], colors: [], sizes: [], source: 'manual' },
@@ -406,25 +455,13 @@ async function renderNew(prefill) {
     try {
       const { results, region, fallback } = await api(`/search?q=${encodeURIComponent(q)}`);
       if (!results.length) {
-        slot.innerHTML = `<section class="panel"><p style="margin:0">没有搜到「${esc(q)}」。官网是英文名，试试换个说法，比如 wide pants、oversized shirt。</p></section>`;
+        slot.innerHTML = `<section class="panel"><p style="margin:0">No results for “${esc(q)}”. The site uses English names — try other words, e.g. wide pants or oversized shirt.</p></section>`;
         return;
       }
       slot.innerHTML = `
         <section class="panel">
-          <h2>选择商品 <span class="hint" style="font-weight:400">${results.length} 个结果${fallback ? `（本站没搜到，来自${esc(REGION_NAME[region] || region)}站）` : ''}</span></h2>
-          <div class="grid">${results
-            .map(
-              (r) => `<button type="button" class="card result" data-id="${esc(r.productId)}" data-pg="${esc(r.priceGroup)}">
-                <div class="thumb">${r.image ? img(r.image, r.name) : ''}</div>
-                <div class="body">
-                  <div class="cap">${esc(r.productId.replace(/^E/, '').replace(/-000$/, ''))}</div>
-                  <div class="name">${esc(r.name)}</div>
-                  ${r.price ? `<div class="price${(r.flags || []).includes('Reduced Price') ? ' sale' : ''}"><b>${esc(r.price)}</b></div>` : ''}
-                  ${r.flags?.length ? `<div class="cap">${esc(r.flags.join(' · '))}</div>` : ''}
-                </div>
-              </button>`,
-            )
-            .join('')}</div>
+          <h2>Pick a product <span class="hint" style="font-weight:400">${results.length} results${fallback ? ` · from the ${esc(REGION_NAME[region] || region)} site` : ''}</span></h2>
+          ${resultCardsHtml(results)}
         </section>`;
       slot.querySelectorAll('.result').forEach((b) =>
         b.addEventListener('click', () => {
@@ -453,24 +490,25 @@ async function renderNew(prefill) {
     ev.preventDefault();
     run();
   });
-  if (prefill) run();
+  // 从搜索结果点进来时 prefill 是 /products/<编号>/<priceGroup>，输入框只显示编号，查询时仍带上 priceGroup
+  if (prefill) /\d{6}/.test(prefill) ? lookup(prefill) : run();
   else form.pid.focus();
 }
 
 async function renderEdit(id) {
   const entries = await loadEntries();
   const entry = entries.find((e) => e.id === id);
-  if (!entry) throw new Error('找不到这条记录');
-  app.innerHTML = `<a class="back" href="#/entry/${esc(id)}">‹ 返回</a><div id="form-slot"></div>`;
+  if (!entry) throw new Error('Record not found');
+  app.innerHTML = `<a class="back" href="#/entry/${esc(id)}">‹ Back</a><div id="form-slot"></div>`;
   renderForm(app.querySelector('#form-slot'), structuredClone(entry), { editing: true });
 }
 
 // 常用短语：把以前填过的内容按逗号拆开，按用过的次数排序，点一下就能填进去（类似外卖备注）
 const PHRASE_SEP = /[,，、;；\n]+/;
 const STARTER_PHRASES = {
-  pros: ['版型好', '面料舒服', '颜色好看', '显瘦', '不透', '性价比高'],
-  notes: ['肩线偏宽', '袖子偏长', '有点透', '容易起球', '容易皱', '有静电'],
-  tags: ['通勤', '叠穿', '等打折'],
+  pros: ['Great fit', 'Comfy fabric', 'Nice color', 'Flattering', 'Not see-through', 'Good value'],
+  notes: ['Wide shoulders', 'Long sleeves', 'A bit sheer', 'Pills easily', 'Wrinkles easily', 'Static'],
+  tags: ['work', 'layering', 'wait for sale'],
 };
 
 function splitPhrases(v) {
@@ -487,7 +525,24 @@ function refPriceText(p) {
   const r = p.refPrice;
   if (!r) return '';
   const now = price(r);
-  return r.base > r.value ? `${now}（原价 ${price({ value: r.base, currency: r.currency })}）` : now;
+  return r.base > r.value ? `${now} (was ${price({ value: r.base, currency: r.currency })})` : now;
+}
+
+// uniqlo.com 搜索结果格子（新建页和首页共用），点了按编号查询
+function resultCardsHtml(results) {
+  return `<div class="grid">${results
+    .map(
+      (r) => `<button type="button" class="card result" data-id="${esc(r.productId)}" data-pg="${esc(r.priceGroup)}">
+        <div class="thumb">${r.image ? img(r.image, r.name) : ''}</div>
+        <div class="body">
+          <div class="cap">${esc(r.productId.replace(/^E/, '').replace(/-000$/, ''))}</div>
+          <div class="name">${esc(r.name)}</div>
+          ${r.price ? `<div class="price${(r.flags || []).includes('Reduced Price') ? ' sale' : ''}"><b>${esc(r.price)}</b></div>` : ''}
+          ${r.flags?.length ? `<div class="cap">${esc(r.flags.join(' · '))}</div>` : ''}
+        </div>
+      </button>`,
+    )
+    .join('')}</div>`;
 }
 
 // 价格块：比原价便宜时折后价标红、原价划线，并标出折扣
@@ -556,7 +611,7 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
     const dot = (o) => (chips[o] ? `<img class="dot" src="${esc(chips[o])}" alt="" referrerpolicy="no-referrer">` : '');
     return `<div class="pick" role="radiogroup">
       ${opts.map((o) => `<label><input type="radio" name="${name}" value="${esc(o)}" ${o === value ? 'checked' : ''}><span>${dot(o)}${esc(o)}</span></label>`).join('')}
-      <input type="text" name="${name}_other" value="${esc(other)}" placeholder="${placeholder}" aria-label="其他${name === 'size' ? '尺码' : '颜色'}">
+      <input type="text" name="${name}_other" value="${esc(other)}" placeholder="${placeholder}" aria-label="Other ${name === 'size' ? 'size' : 'color'}">
     </div>`;
   };
 
@@ -565,20 +620,20 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
       <div class="product">
         <div class="hero" id="hero">${img(heroImage(entry), p.name)}</div>
         <div>
-          <h3>${esc(p.name || '（未命名商品）')}</h3>
+          <h3>${esc(p.name || '(Unnamed product)')}</h3>
           <div class="sub">
             <span>${esc(p.productId)}</span>
             ${p.category?.length ? `<span>${esc(p.category.join(' › '))}</span>` : ''}
             ${priceHtml(p.price?.value, p.basePrice?.value, p.price?.currency)}
-            ${p.region ? `<span>本站官网没有上架，资料来自${esc(REGION_NAME[p.region] || p.region)}站${p.refPrice ? `，参考价 ${esc(refPriceText(p))}` : ''}</span>` : ''}
-            ${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">官网页面 ↗</a>` : ''}
+            ${p.region ? `<span>Not listed on your site — details from the ${esc(REGION_NAME[p.region] || p.region)} site${p.refPrice ? `, reference price ${esc(refPriceText(p))}` : ''}</span>` : ''}
+            ${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">Product page ↗</a>` : ''}
           </div>
-          ${previous.length ? `<p class="hint">你之前试穿过这款 ${previous.length} 次：${previous.map((e) => `<a href="#/entry/${esc(e.id)}">${esc(e.triedAt || '')} ${esc(e.size || '')}</a>`).join('，')}</p>` : ''}
+          ${previous.length ? `<p class="hint">You've tried this ${previous.length === 1 ? 'once' : `${previous.length} times`}: ${previous.map((e) => `<a href="#/entry/${esc(e.id)}">${esc(e.triedAt || '')} ${esc(e.size || '')}</a>`).join(', ')}</p>` : ''}
         </div>
       </div>
       ${
         (p.images || []).some((i) => i.color)
-          ? `<div class="swatches" role="group" aria-label="选择颜色">${p.images
+          ? `<div class="swatches" role="group" aria-label="Choose color">${p.images
               .filter((i) => i.color)
               .map((i) => {
                 const c = (p.colors || []).find((c) => c.code === i.color || i.color.endsWith(c.code));
@@ -591,40 +646,40 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
     </section>
 
     <form class="panel" id="entry-form">
-      <h2>${editing ? '编辑试穿记录' : '试穿反馈'}</h2>
+      <h2>${editing ? 'Edit try-on' : 'Try-on notes'}</h2>
       <div class="fields">
         ${
           manual
-            ? `<label class="field full"><span>商品名称</span><input type="text" name="p_name" value="${esc(p.name)}" required></label>
-               <label class="field full"><span>图片链接（可选）</span><input type="url" name="p_image" value="${esc(p.images?.[0]?.url || '')}" placeholder="https://image.uniqlo.com/…"></label>`
+            ? `<label class="field full"><span>Product name</span><input type="text" name="p_name" value="${esc(p.name)}" required></label>
+               <label class="field full"><span>Image URL (optional)</span><input type="url" name="p_image" value="${esc(p.images?.[0]?.url || '')}" placeholder="https://image.uniqlo.com/…"></label>`
             : ''
         }
-        <label class="field"><span>分类</span>
+        <label class="field"><span>Category</span>
           <select name="category">${CATEGORIES.map(([k, n]) => `<option value="${k}" ${entry.category === k ? 'selected' : ''}>${n}</option>`).join('')}</select>
         </label>
-        <label class="field"><span>试穿日期</span><input type="date" name="triedAt" value="${esc(entry.triedAt || '')}"></label>
-        <div class="field full"><span>颜色</span>${picker('color', colorOpts, entry.color || '', colorOpts.length ? '其他' : '如 09 BLACK', colorChips)}</div>
-        <div class="field full"><span>试穿尺码</span>${picker('size', sizeOpts, entry.size || '', '其他')}</div>
-        <div class="field full"><span>尺码感受</span>${seg('fit', FIT, entry.fit)}</div>
-        <div class="field full"><span>长度</span>${seg('length', LENGTH, entry.length)}</div>
-        <div class="field"><span>评分</span>
-          <div class="star-input" id="stars">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-n="${n}" aria-label="${n} 星" class="${n <= (entry.rating || 0) ? 'on' : ''}">★</button>`).join('')}</div>
+        <label class="field"><span>Date tried</span><input type="date" name="triedAt" value="${esc(entry.triedAt || '')}"></label>
+        <div class="field full"><span>Color</span>${picker('color', colorOpts, entry.color || '', colorOpts.length ? 'Other' : 'e.g. 09 BLACK', colorChips)}</div>
+        <div class="field full"><span>Size tried</span>${picker('size', sizeOpts, entry.size || '', 'Other')}</div>
+        <div class="field full"><span>Fit</span>${seg('fit', FIT, entry.fit)}</div>
+        <div class="field full"><span>Length</span>${seg('length', LENGTH, entry.length)}</div>
+        <div class="field"><span>Rating</span>
+          <div class="star-input" id="stars">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-n="${n}" aria-label="${n} stars" class="${n <= (entry.rating || 0) ? 'on' : ''}">★</button>`).join('')}</div>
         </div>
-        <label class="field"><span>门店/地点</span>
-          <input type="text" name="store" value="${esc(entry.store || '')}" list="stores" placeholder="如 Drottninggatan">
+        <label class="field"><span>Store</span>
+          <input type="text" name="store" value="${esc(entry.store || '')}" list="stores" placeholder="e.g. Drottninggatan">
           <datalist id="stores">${stores.map((s) => `<option value="${esc(s)}">`).join('')}</datalist>
         </label>
-        <div class="field full" id="verdict-field"><span>结论 <b class="req">*</b></span>${seg('verdict', VERDICT, entry.verdict)}<p class="error" id="verdict-err" hidden>请选择结论</p></div>
-        <label class="field"><span>原价（${esc(currency)}）</span><input type="number" name="originalPrice" value="${esc(originalPrice)}" min="0" step="any" inputmode="decimal"></label>
-        <label class="field"><span>购买价（${esc(currency)}）</span><input type="number" name="paidPrice" value="${esc(paidPrice)}" min="0" step="any" inputmode="decimal"></label>
-        <div class="field full"><label for="f-pros">喜欢的地方</label><textarea id="f-pros" name="pros" placeholder="版型、面料、颜色…">${esc(entry.pros || '')}</textarea>${phrases('pros')}</div>
-        <div class="field full"><label for="f-notes">不满意 / 备注</label><textarea id="f-notes" name="notes" placeholder="肩线、袖长、透不透、起不起球…">${esc(entry.notes || '')}</textarea>${phrases('notes')}</div>
-        <div class="field full"><label for="f-tags">标签（逗号分隔）</label><input type="text" id="f-tags" name="tags" value="${esc((entry.tags || []).join(', '))}" placeholder="通勤, 叠穿, 等打折">${phrases('tags')}</div>
+        <div class="field full" id="verdict-field"><span>Verdict <b class="req">*</b></span>${seg('verdict', VERDICT, entry.verdict)}<p class="error" id="verdict-err" hidden>Please choose a verdict</p></div>
+        <label class="field"><span>Original price (${esc(currency)})</span><input type="number" name="originalPrice" value="${esc(originalPrice)}" min="0" step="any" inputmode="decimal"></label>
+        <label class="field"><span>Price paid (${esc(currency)})</span><input type="number" name="paidPrice" value="${esc(paidPrice)}" min="0" step="any" inputmode="decimal"></label>
+        <div class="field full"><label for="f-pros">What I liked</label><textarea id="f-pros" name="pros" placeholder="Fit, fabric, color…">${esc(entry.pros || '')}</textarea>${phrases('pros')}</div>
+        <div class="field full"><label for="f-notes">Dislikes / notes</label><textarea id="f-notes" name="notes" placeholder="Shoulders, sleeve length, sheerness, pilling…">${esc(entry.notes || '')}</textarea>${phrases('notes')}</div>
+        <div class="field full"><label for="f-tags">Tags (comma separated)</label><input type="text" id="f-tags" name="tags" value="${esc((entry.tags || []).join(', '))}" placeholder="work, layering, wait for sale">${phrases('tags')}</div>
       </div>
       <p class="error" id="save-err" hidden></p>
       <div class="actions">
-        <a class="btn" href="${editing ? `#/entry/${esc(entry.id)}` : '#/'}">取消</a>
-        <button class="btn primary" id="save">保存</button>
+        <a class="btn" href="${editing ? `#/entry/${esc(entry.id)}` : '#/'}">Cancel</a>
+        <button class="btn primary" id="save">Save</button>
       </div>
     </form>`;
 
@@ -659,7 +714,7 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
   // 常用短语：点一下加到末尾，已经填了的再点一下就去掉
   slot.querySelectorAll('.phrases').forEach((box) => {
     const input = form.elements[box.dataset.for];
-    const joiner = box.dataset.for === 'tags' ? ', ' : '，';
+    const joiner = ', ';
     const sync = () => {
       const have = new Set(splitPhrases(input.value));
       box.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', have.has(b.dataset.t)));
@@ -734,12 +789,12 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
         ? await api(`/entries/${encodeURIComponent(entry.id)}`, { method: 'PUT', body: data })
         : await api('/entries', { method: 'POST', body: data });
       upsertLocal(res.entry);
-      toast('已保存');
+      toast('Saved');
       // 新建完回到「我的试穿」列表；编辑完回到这条记录的详情
       location.hash = editing ? `#/entry/${res.entry.id}` : '#/';
     } catch (e) {
       err.hidden = false;
-      err.textContent = `保存失败：${e.message}`;
+      err.textContent = `Couldn't save: ${e.message}`;
       btn.disabled = false;
     }
   });
@@ -750,7 +805,7 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
 async function renderDetail(id) {
   const entries = await loadEntries();
   const e = entries.find((x) => x.id === id);
-  if (!e) throw new Error('找不到这条记录');
+  if (!e) throw new Error('Record not found');
   const p = e.product || {};
   const hero = heroImage(e);
   const gallery = [hero, ...(p.images || []).filter((i) => i !== hero)].filter(Boolean).slice(0, 12);
@@ -758,59 +813,59 @@ async function renderDetail(id) {
 
   const row = (k, v) => (v ? `<dt>${k}</dt><dd>${v}</dd>` : '');
   app.innerHTML = `
-    <a class="back" href="#/">‹ 全部记录</a>
+    <a class="back" href="#/">‹ All try-ons</a>
     <article class="detail">
       <div class="detail-hero">
         ${gallery.length ? `<div class="gallery">${gallery.map((i) => img(i, p.name)).join('')}</div>` : ''}
         <div>
           <h1>${esc(p.name || p.productId)}</h1>
-          <p class="pid">商品编号 ${esc(p.code || p.productId)}${p.category?.length ? ` · ${esc(p.category.join(' › '))}` : ''}</p>
+          <p class="pid">Product no. ${esc(p.code || p.productId)}${p.category?.length ? ` · ${esc(p.category.join(' › '))}` : ''}</p>
           ${entryPriceHtml(e, 'big')}
           <div class="tags-row">
             ${e.verdict ? `<span class="badge ${esc(e.verdict)}">${VERDICT[e.verdict]}</span>` : ''}
-            <span class="badge">${esc(CAT_NAME[e.category] || '其他')}</span>
+            <span class="badge">${esc(CAT_NAME[e.category] || 'Other')}</span>
             ${stars(e.rating)}
           </div>
           <section class="panel">
-            <h2>试穿反馈</h2>
+            <h2>Try-on notes</h2>
             <dl class="kv">
-              ${row('试穿日期', esc(e.triedAt))}
-              ${row('门店', esc(e.store))}
-              ${row('颜色', esc(e.color))}
-              ${row('尺码', esc(e.size))}
-              ${row('尺码感受', FIT[e.fit] || '')}
-              ${row('长度', LENGTH[e.length] || '')}
-              ${row('原价', esc(price({ value: e.originalPrice, currency: e.currency })))}
-              ${row('购买价', esc(price({ value: e.paidPrice, currency: e.currency })))}
-              ${row('标签', esc((e.tags || []).join('、')))}
+              ${row('Date tried', esc(e.triedAt))}
+              ${row('Store', esc(e.store))}
+              ${row('Color', esc(e.color))}
+              ${row('Size', esc(e.size))}
+              ${row('Fit', FIT[e.fit] || '')}
+              ${row('Length', LENGTH[e.length] || '')}
+              ${row('Original price', esc(price({ value: e.originalPrice, currency: e.currency })))}
+              ${row('Price paid', esc(price({ value: e.paidPrice, currency: e.currency })))}
+              ${row('Tags', esc((e.tags || []).join(', ')))}
             </dl>
           </section>
-          ${e.pros ? `<section class="panel"><h2>喜欢的地方</h2><p class="note">${esc(e.pros)}</p></section>` : ''}
-          ${e.notes ? `<section class="panel"><h2>不满意 / 备注</h2><p class="note">${esc(e.notes)}</p></section>` : ''}
+          ${e.pros ? `<section class="panel"><h2>What I liked</h2><p class="note">${esc(e.pros)}</p></section>` : ''}
+          ${e.notes ? `<section class="panel"><h2>Dislikes / notes</h2><p class="note">${esc(e.notes)}</p></section>` : ''}
           <section class="panel">
-            <h2>商品信息</h2>
+            <h2>Product info</h2>
             <dl class="kv">
-              ${row('编号', esc(p.productId))}
-              ${row('官网分类', esc((p.category || []).join(' › ')))}
-              ${row('官网价', esc(price(p.price)))}
-              ${row('资料来源', p.region ? `${esc(REGION_NAME[p.region] || p.region)}站官网` : '')}
-              ${row('参考价', esc(refPriceText(p)))}
-              ${row('材质', esc(p.composition))}
-              ${row('官网', p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">打开商品页 ↗</a>` : '')}
+              ${row('Product ID', esc(p.productId))}
+              ${row('Site category', esc((p.category || []).join(' › ')))}
+              ${row('Site price', esc(price(p.price)))}
+              ${row('Source', p.region ? `${esc(REGION_NAME[p.region] || p.region)} site` : '')}
+              ${row('Reference price', esc(refPriceText(p)))}
+              ${row('Material', esc(p.composition))}
+              ${row('Website', p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">Open product page ↗</a>` : '')}
             </dl>
           </section>
-          ${canWatch(p) ? '<section class="panel" id="watch-panel"><h2>降价提醒</h2><p class="hint" style="margin:0">读取中…</p></section>' : ''}
+          ${canWatch(p) ? '<section class="panel" id="watch-panel"><h2>Price alert</h2><p class="hint" style="margin:0">Loading…</p></section>' : ''}
           ${
             related.length
-              ? `<section class="panel"><h2>同款其他试穿</h2><div class="related">${related
+              ? `<section class="panel"><h2>Other try-ons of this item</h2><div class="related">${related
                   .map((r) => `<a href="#/entry/${esc(r.id)}"><span>${esc(r.triedAt || '')} · ${esc(r.size || '')} ${esc(r.color || '')}</span><span>${FIT[r.fit] || ''}</span></a>`)
                   .join('')}</div></section>`
               : ''
           }
           <div class="actions">
-            <button class="btn danger" id="del">删除</button>
-            <a class="btn" href="#/new/${encodeURIComponent(p.productId || '')}">再记一次</a>
-            <a class="btn primary" href="#/edit/${esc(e.id)}">编辑</a>
+            <button class="btn danger" id="del">Delete</button>
+            <a class="btn" href="#/new/${encodeURIComponent(p.productId || '')}">Log again</a>
+            <a class="btn primary" href="#/edit/${esc(e.id)}">Edit</a>
           </div>
         </div>
       </div>
@@ -820,15 +875,15 @@ async function renderDetail(id) {
   if (wp) drawWatchPanel(wp, p);
 
   app.querySelector('#del').addEventListener('click', async () => {
-    if (!confirm('确定删除这条试穿记录吗？')) return;
+    if (!confirm('Delete this try-on?')) return;
     try {
       await api(`/entries/${encodeURIComponent(e.id)}`, { method: 'DELETE' });
       state.entries = state.entries.filter((x) => x.id !== e.id);
       safeSet(CACHE_KEY, JSON.stringify(state.entries));
-      toast('已删除');
+      toast('Deleted');
       location.hash = '#/';
     } catch (err) {
-      toast(`删除失败：${err.message}`);
+      toast(`Couldn't delete: ${err.message}`);
     }
   });
 }
@@ -840,12 +895,12 @@ function canWatch(p) {
   return p && p.source === 'api' && !p.region && /^[A-Z]\d{6}-\d{3}$/.test(p.productId || '');
 }
 
-// 「3 小时前检查」/「还没查过」
+// 「Checked 3 h ago」/「Not checked yet」
 function checkedText(ts) {
-  if (!ts) return '还没查过';
+  if (!ts) return 'Not checked yet';
   const m = Math.round((Date.now() - ts) / 60000);
-  const ago = m < 1 ? '刚刚' : m < 60 ? `${m} 分钟前` : m < 60 * 24 ? `${Math.round(m / 60)} 小时前` : `${Math.round(m / 60 / 24)} 天前`;
-  return `${ago}检查`;
+  const ago = m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 60 * 24 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 60 / 24)} d ago`;
+  return `Checked ${ago}`;
 }
 
 // 详情页里的降价提醒：关注/取消关注，可设目标价
@@ -855,27 +910,27 @@ async function drawWatchPanel(el, p) {
     w = (await api(`/watches/${encodeURIComponent(p.productId)}`)).watch;
   } catch (e) {
     if (e.status !== 404) {
-      el.innerHTML = `<h2>降价提醒</h2><p class="error">${esc(e.message)}</p>`;
+      el.innerHTML = `<h2>Price alert</h2><p class="error">${esc(e.message)}</p>`;
       return;
     }
   }
   const cur = p.price?.currency || 'SEK';
   el.innerHTML = `
-    <h2>降价提醒</h2>
+    <h2>Price alert</h2>
     ${
       w
-        ? `<p style="margin:0 0 4px">已关注 · 最近价格 <b>${esc(price({ value: w.lastPrice, currency: w.currency || cur }))}</b>${
-            w.lowestPrice != null && w.lowestPrice < w.lastPrice ? `，最低到过 ${esc(price({ value: w.lowestPrice, currency: w.currency || cur }))}` : ''
+        ? `<p style="margin:0 0 4px">Watching · latest price <b>${esc(price({ value: w.lastPrice, currency: w.currency || cur }))}</b>${
+            w.lowestPrice != null && w.lowestPrice < w.lastPrice ? `, lowest seen ${esc(price({ value: w.lowestPrice, currency: w.currency || cur }))}` : ''
           }</p>
-           <p class="hint" style="margin:0 0 12px">${esc(checkedText(w.lastChecked))} · 降价时发邮件提醒（<a href="#/watch">管理</a>）</p>`
-        : '<p class="hint" style="margin:0 0 12px">关注后每隔几小时查一次官网价格，降价时发邮件提醒你。</p>'
+           <p class="hint" style="margin:0 0 12px">${esc(checkedText(w.lastChecked))} · you'll get an email when the price drops (<a href="#/watch">manage</a>)</p>`
+        : '<p class="hint" style="margin:0 0 12px">Checks the uniqlo.com price every few hours and emails you when it drops.</p>'
     }
     <form class="lookup" id="watch-form">
-      <input type="number" name="target" min="0" step="any" inputmode="decimal" placeholder="目标价（可选，${esc(cur)}）" value="${esc(w?.targetPrice ?? '')}" aria-label="目标价">
-      <button class="btn ${w ? '' : 'primary'}">${w ? '保存' : '关注降价'}</button>
+      <input type="number" name="target" min="0" step="any" inputmode="decimal" placeholder="Target price (optional, ${esc(cur)})" value="${esc(w?.targetPrice ?? '')}" aria-label="Target price">
+      <button class="btn ${w ? '' : 'primary'}">${w ? 'Save' : 'Watch price'}</button>
     </form>
-    <p class="hint">${w ? '' : '不填目标价：只要比现在便宜就提醒；填了：降到目标价及以下才提醒。'}</p>
-    ${w ? '<div class="actions" style="justify-content:flex-start;margin-top:8px"><button class="btn danger" id="unwatch">取消关注</button></div>' : ''}`;
+    <p class="hint">${w ? '' : 'No target: alert on any drop. With a target: alert only at or below it.'}</p>
+    ${w ? '<div class="actions" style="justify-content:flex-start;margin-top:8px"><button class="btn danger" id="unwatch">Stop watching</button></div>' : ''}`;
 
   el.querySelector('#watch-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -885,47 +940,78 @@ async function drawWatchPanel(el, p) {
         method: 'PUT',
         body: { targetPrice: target, name: p.name, image: p.images?.[0]?.url, url: p.url, currency: p.price?.currency, price: p.price?.value, basePrice: p.basePrice?.value },
       });
-      toast(w ? '已保存' : '已关注，降价时会发邮件');
+      toast(w ? 'Saved' : "Watching — you'll get an email when it drops");
       drawWatchPanel(el, p);
     } catch (e) {
-      toast(`失败：${e.message}`);
+      toast(`Failed: ${e.message}`);
     }
   });
   el.querySelector('#unwatch')?.addEventListener('click', async () => {
     await api(`/watches/${encodeURIComponent(p.productId)}`, { method: 'DELETE' }).catch(() => {});
-    toast('已取消关注');
+    toast('Stopped watching');
     drawWatchPanel(el, p);
   });
 }
 
+// 一键关注所有「想买」的商品（已经关注的、不能跟踪价格的跳过）
+function wantToWatch(watches) {
+  const watched = new Set(watches.map((w) => w.productId));
+  const seen = new Set();
+  return (state.entries || []).filter((e) => {
+    const id = e.product?.productId;
+    if (e.verdict !== 'want' || !canWatch(e.product) || watched.has(id) || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+async function watchAll(list) {
+  let ok = 0;
+  for (const e of list) {
+    const p = e.product;
+    try {
+      await api(`/watches/${encodeURIComponent(p.productId)}`, {
+        method: 'PUT',
+        body: { name: p.name, image: heroImage(e)?.url || p.images?.[0]?.url, url: p.url, currency: p.price?.currency, price: p.price?.value, basePrice: p.basePrice?.value },
+      });
+      ok++;
+    } catch {}
+  }
+  return ok;
+}
+
 async function renderWatch() {
-  app.innerHTML = '<div class="page-head"><h1>降价提醒</h1></div><p class="hint">读取中…</p>';
-  const { watches, email } = await api('/watches');
+  app.innerHTML = '<div class="page-head"><h1>Price Alerts</h1></div><p class="hint">Loading…</p>';
+  const [{ watches, email }] = await Promise.all([api('/watches'), loadEntries().catch(() => [])]);
   const ready = email.to && email.keyConfigured;
+  const pending = wantToWatch(watches);
 
   app.innerHTML = `
-    <div class="page-head"><h1>降价提醒</h1><span class="count">${watches.length} 件</span></div>
+    <div class="page-head"><h1>Price Alerts</h1><span class="count">${watches.length} ${watches.length === 1 ? 'item' : 'items'}</span></div>
     <section class="panel">
-      <h2>提醒邮箱</h2>
+      <h2>Alert email</h2>
       <form class="lookup" id="email-form">
         <input type="email" name="email" value="${esc(email.to || '')}" placeholder="you@example.com" autocomplete="email" required>
-        <button class="btn">保存</button>
+        <button class="btn">Save</button>
       </form>
       ${
         email.keyConfigured
-          ? `<p class="hint">邮件服务已设置。${email.to ? '<button class="btn" id="test-email" style="min-height:32px;padding:0 12px;margin-left:6px">发一封测试邮件</button>' : ''}</p>`
-          : `<p class="hint">还差一步：服务器还没有设置发信用的 <code>RESEND_API_KEY</code>（见 README「降价提醒」）。设置好之前只记录价格，不发邮件。</p>`
+          ? `<p class="hint">Email service is set up.${email.to ? '<button class="btn" id="test-email" style="min-height:32px;padding:0 12px;margin-left:6px">Send a test email</button>' : ''}</p>`
+          : `<p class="hint">One more step: the server doesn't have a <code>RESEND_API_KEY</code> yet (see the README). Until then prices are tracked but no emails are sent.</p>`
       }
-      <p class="hint">Resend 免费账号没有绑定自己的域名时，只能发到注册 Resend 用的那个邮箱，这里请填同一个。</p>
+      <p class="hint">A free Resend account without its own domain can only send to the address you signed up with, so use that same address here.</p>
     </section>
     <section class="panel">
-      <h2 style="display:flex;justify-content:space-between;align-items:center">关注的商品
-        ${watches.length ? '<button class="btn" id="check-now" style="min-height:32px;padding:0 12px">立即检查</button>' : ''}</h2>
+      <h2 style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">Watching
+        <span style="display:flex;gap:8px">
+          ${pending.length ? `<button class="btn primary" id="watch-want" style="min-height:32px;padding:0 12px">Watch all “Want” (${pending.length})</button>` : ''}
+          ${watches.length ? '<button class="btn" id="check-now" style="min-height:32px;padding:0 12px">Check now</button>' : ''}
+        </span></h2>
       ${
         watches.length
           ? `<div class="grid">${watches.map(watchCard).join('')}</div>
-             <p class="hint" style="margin-top:20px">每小时自动检查一批（每次 ${4} 件，轮流），关注得多时每件几小时查一次。${ready ? '' : '<b>邮件还没设置好，降价时暂时不会通知。</b>'}</p>`
-          : '<p class="hint" style="margin:0">还没有关注的商品。在任意一条试穿记录的详情页底部点「关注降价」。</p>'
+             <p class="hint" style="margin-top:20px">A batch is checked every hour (4 items at a time, in rotation), so with many items each one is checked every few hours.${ready ? '' : ' <b>Email isn’t set up yet, so drops won’t be sent.</b>'}</p>`
+          : '<p class="hint" style="margin:0">Nothing watched yet. Open any try-on and tap “Watch price” at the bottom, or watch everything marked “Want” in one tap.</p>'
       }
     </section>`;
 
@@ -933,7 +1019,7 @@ async function renderWatch() {
     ev.preventDefault();
     try {
       await api('/settings', { method: 'PUT', body: { alertEmail: ev.target.email.value.trim() } });
-      toast('已保存');
+      toast('Saved');
       renderWatch();
     } catch (e) {
       toast(e.message);
@@ -943,19 +1029,30 @@ async function renderWatch() {
     ev.target.disabled = true;
     try {
       await api('/watches/test-email', { method: 'POST' });
-      toast('已发送，去邮箱看看（可能在垃圾邮件里）');
+      toast('Sent — check your inbox (and spam folder)');
     } catch (e) {
-      toast(`发送失败：${e.body?.error || e.message}`);
+      toast(`Couldn't send: ${e.body?.error || e.message}`);
     } finally {
       ev.target.disabled = false;
     }
   });
+  app.querySelector('#watch-want')?.addEventListener('click', async (ev) => {
+    ev.target.disabled = true;
+    ev.target.textContent = 'Adding…';
+    const ok = await watchAll(pending);
+    toast(`Watching ${ok} more item${ok === 1 ? '' : 's'}`);
+    renderWatch();
+  });
   app.querySelector('#check-now')?.addEventListener('click', async (ev) => {
     ev.target.disabled = true;
-    ev.target.textContent = '检查中…';
+    ev.target.textContent = 'Checking…';
     try {
       const r = await api('/watches/check', { method: 'POST', body: {} });
-      toast(r.notified ? `${r.notified} 件降价了${r.email?.ok ? '，已发邮件' : r.email ? `，邮件没发出去：${r.email.error}` : ''}` : `查了 ${r.checked.length} 件，没有新的降价`);
+      toast(
+        r.notified
+          ? `${r.notified} price drop${r.notified === 1 ? '' : 's'}${r.email?.ok ? ' — email sent' : r.email ? ` — email not sent: ${r.email.error}` : ''}`
+          : `Checked ${r.checked.length}, no new drops`,
+      );
       renderWatch();
     } catch (e) {
       toast(e.message);
@@ -966,7 +1063,7 @@ async function renderWatch() {
     b.addEventListener('click', async (ev) => {
       ev.preventDefault();
       await api(`/watches/${encodeURIComponent(b.dataset.unwatch)}`, { method: 'DELETE' }).catch(() => {});
-      toast('已取消关注');
+      toast('Stopped watching');
       renderWatch();
     }),
   );
@@ -982,9 +1079,9 @@ function watchCard(w) {
         <div class="cap">${esc(w.productId.replace(/^E/, '').replace(/-000$/, ''))}</div>
         <div class="name">${esc(w.name || w.productId)}</div>
         ${priceHtml(w.lastPrice, w.basePrice, w.currency)}
-        ${w.targetPrice != null ? `<div class="cap">目标价 ${esc(price({ value: w.targetPrice, currency: w.currency }))}${w.lastPrice != null && w.lastPrice <= w.targetPrice ? ' · <b style="color:var(--accent)">已达到</b>' : ''}</div>` : ''}
-        ${w.saleColors?.length ? `<div class="cap">降价颜色：${esc(w.saleColors.join('、'))}</div>` : ''}
-        <div class="meta"><span>${esc(checkedText(w.lastChecked))}</span><button type="button" class="linkish" data-unwatch="${esc(w.productId)}">取消关注</button></div>
+        ${w.targetPrice != null ? `<div class="cap">Target ${esc(price({ value: w.targetPrice, currency: w.currency }))}${w.lastPrice != null && w.lastPrice <= w.targetPrice ? ' · <b style="color:var(--accent)">Reached</b>' : ''}</div>` : ''}
+        ${w.saleColors?.length ? `<div class="cap">On sale: ${esc(w.saleColors.join(', '))}</div>` : ''}
+        <div class="meta"><span>${esc(checkedText(w.lastChecked))}</span><button type="button" class="linkish" data-unwatch="${esc(w.productId)}">Stop watching</button></div>
       </div>
     </a>`;
 }
@@ -999,42 +1096,42 @@ async function renderSettings() {
   const count = (k) => entries.filter((e) => e.verdict === k).length;
 
   app.innerHTML = `
-    <a class="back" href="#/">‹ 返回</a>
+    <a class="back" href="#/">‹ Back</a>
     <section class="panel">
-      <h2>概览</h2>
+      <h2>Overview</h2>
       <div class="stats">
-        <div class="stat"><b>${entries.length}</b><span>试穿记录</span></div>
-        <div class="stat"><b>${new Set(entries.map((e) => e.product?.productId)).size}</b><span>不同款式</span></div>
-        <div class="stat"><b>${count('bought')}</b><span>已购买</span></div>
-        <div class="stat"><b>${count('want')}</b><span>想买</span></div>
+        <div class="stat"><b>${entries.length}</b><span>Try-ons</span></div>
+        <div class="stat"><b>${new Set(entries.map((e) => e.product?.productId)).size}</b><span>Styles</span></div>
+        <div class="stat"><b>${count('bought')}</b><span>Bought</span></div>
+        <div class="stat"><b>${count('want')}</b><span>Want</span></div>
       </div>
-      ${info ? `<p class="hint">优衣库站点：${esc(info.region)} / ${esc(info.lang)}（在 wrangler.jsonc 的 vars 里修改）</p>` : ''}
+      ${info ? `<p class="hint">Uniqlo site: ${esc(info.region)} / ${esc(info.lang)} (change it under vars in wrangler.jsonc)</p>` : ''}
     </section>
     <section class="panel">
-      <h2>官网图片存档</h2>
+      <h2>Image archive</h2>
       ${
         !archive
-          ? '<p class="hint" style="margin:0">无法读取存档状态</p>'
+          ? '<p class="hint" style="margin:0">Couldn’t load archive status</p>'
           : !archive.enabled
-            ? '<p class="hint" style="margin:0">未启用：服务器没有绑定 R2（见 README「官网图片存档」）。现在显示的是官网实时图片，商品下架后可能失效。</p>'
-            : `<p style="margin:0 0 10px">已存档 <b>${archive.archived}</b> / ${archive.total} 张商品图</p>
-               <p class="hint" style="margin:0 0 12px">保存记录时会自动把官网图复制一份到你自己的存储里，官网删图后照样能看。</p>
-               ${archive.archived < archive.total ? '<div class="actions" style="justify-content:flex-start"><button class="btn" id="backfill">补存剩下的图片</button></div>' : ''}`
+            ? '<p class="hint" style="margin:0">Off: the server has no R2 bucket bound (see the README). Images load live from uniqlo.com and may disappear when a product is removed.</p>'
+            : `<p style="margin:0 0 10px">Archived <b>${archive.archived}</b> / ${archive.total} product images</p>
+               <p class="hint" style="margin:0 0 12px">Product images are copied to your own storage when you save a try-on, so they stay even if uniqlo.com removes them.</p>
+               ${archive.archived < archive.total ? '<div class="actions" style="justify-content:flex-start"><button class="btn" id="backfill">Archive remaining images</button></div>' : ''}`
       }
     </section>
     <section class="panel">
-      <h2>备份</h2>
-      <p class="hint" style="margin:0 0 12px">导出为 JSON 文件；导入会把文件里的记录作为新记录追加。</p>
+      <h2>Backup</h2>
+      <p class="hint" style="margin:0 0 12px">Export as a JSON file. Importing adds the records in the file as new try-ons.</p>
       <div class="actions" style="justify-content:flex-start">
-        <button class="btn" id="export">导出 JSON</button>
-        <label class="btn">导入 JSON<input type="file" id="import" accept="application/json,.json" hidden></label>
+        <button class="btn" id="export">Export JSON</button>
+        <label class="btn">Import JSON<input type="file" id="import" accept="application/json,.json" hidden></label>
       </div>
     </section>
     <section class="panel">
-      <h2>设备</h2>
+      <h2>Device</h2>
       <div class="actions" style="justify-content:flex-start">
-        <button class="btn" id="refresh">重新同步</button>
-        <button class="btn danger" id="logout">退出登录</button>
+        <button class="btn" id="refresh">Sync again</button>
+        <button class="btn danger" id="logout">Log out</button>
       </div>
     </section>`;
 
@@ -1060,10 +1157,10 @@ async function renderSettings() {
         ok++;
       }
       await loadEntries(true);
-      toast(`已导入 ${ok} 条`);
+      toast(`Imported ${ok}`);
       renderSettings();
     } catch (e) {
-      toast(`导入失败：${e.message}`);
+      toast(`Import failed: ${e.message}`);
     }
   });
 
@@ -1074,22 +1171,22 @@ async function renderSettings() {
     try {
       // 每次请求最多处理 30 张，循环到没有进展为止
       for (;;) {
-        btn.textContent = `存档中…已完成 ${total} 张`;
+        btn.textContent = `Archiving… ${total} done`;
         const r = await api('/archive', { method: 'POST' });
         total += r.archived;
         if (!r.remaining || !r.archived) break;
       }
       await loadEntries(true);
-      toast(`新存档 ${total} 张`);
+      toast(`Archived ${total} new images`);
     } catch (e) {
-      toast(`存档失败：${e.message}`);
+      toast(`Archiving failed: ${e.message}`);
     }
     renderSettings();
   });
 
   app.querySelector('#refresh').addEventListener('click', async () => {
     await loadEntries(true);
-    toast('已同步');
+    toast('Synced');
     renderSettings();
   });
 

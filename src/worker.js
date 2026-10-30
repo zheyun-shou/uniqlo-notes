@@ -41,7 +41,7 @@ async function route(request, env, ctx, url) {
 
   if (parts[0] === 'product' && parts[1] && method === 'GET') {
     const input = decodeURIComponent(parts[1]);
-    if (!parseProductInput(input)) return json({ error: 'bad_id', message: '没有识别出 6 位商品编号' }, 400);
+    if (!parseProductInput(input)) return json({ error: 'bad_id', message: 'No 6-digit product number found' }, 400);
     // 调试用：?region=uk&lang=en 可以临时查别的站点
     if (parts[2] === 'raw') {
       const region = url.searchParams.get('region');
@@ -57,7 +57,7 @@ async function route(request, env, ctx, url) {
 
   if (parts[0] === 'search' && method === 'GET') {
     const q = (url.searchParams.get('q') || '').trim().slice(0, 100);
-    if (!q) return json({ error: 'bad_query', message: '请输入要搜索的名称' }, 400);
+    if (!q) return json({ error: 'bad_query', message: 'Enter a product name to search' }, 400);
     if (parts[1] === 'raw') {
       const page = await fetchSearchPage(q, opts);
       return json({ url: page.url, status: page.status, length: page.html.length, results: parseSearchResults(page.html) });
@@ -75,12 +75,12 @@ async function route(request, env, ctx, url) {
     }
     if (id === 'test-email' && method === 'POST') {
       const r = await sendEmail(env, {
-        subject: 'UNIQLO FITLOG 测试邮件',
-        html: '<div style="font-family:Helvetica,Arial,sans-serif"><b>UNIQLO FITLOG</b><p>收到这封邮件说明降价提醒的邮件设置没问题。</p></div>',
+        subject: 'UNIQLO FITLOG test email',
+        html: '<div style="font-family:Helvetica,Arial,sans-serif"><b>UNIQLO FITLOG</b><p>If you can read this, price alert emails are set up correctly.</p></div>',
       });
       return json(r, r.ok ? 200 : 400);
     }
-    if (id && !/^[A-Z]\d{6}-\d{3}$/.test(id)) return json({ error: 'bad_id', message: '商品编号格式不对' }, 400);
+    if (id && !/^[A-Z]\d{6}-\d{3}$/.test(id)) return json({ error: 'bad_id', message: 'Invalid product ID' }, 400);
     if (id && method === 'GET') {
       const w = await getWatch(env, id);
       return w ? json({ watch: w }) : json({ error: 'not_found' }, 404);
@@ -93,7 +93,7 @@ async function route(request, env, ctx, url) {
     const body = await request.json().catch(() => ({}));
     if ('alertEmail' in body) {
       const v = String(body.alertEmail || '').trim();
-      if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return json({ error: 'bad_email', message: '邮箱格式不对' }, 400);
+      if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return json({ error: 'bad_email', message: 'Invalid email address' }, 400);
       await setSetting(env, 'alert_email', v);
     }
     return json({ ok: true, email: await emailStatus(env) });
@@ -120,11 +120,11 @@ async function route(request, env, ctx, url) {
 
 function checkAuth(request, env) {
   if (!env.APP_TOKEN) {
-    return json({ error: 'not_configured', message: '服务器还没设置 APP_TOKEN，请运行 wrangler secret put APP_TOKEN' }, 500);
+    return json({ error: 'not_configured', message: 'APP_TOKEN is not set on the server. Run: wrangler secret put APP_TOKEN' }, 500);
   }
   const header = request.headers.get('Authorization') || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  if (!timingSafeEqual(token, env.APP_TOKEN)) return json({ error: 'unauthorized', message: '口令不正确' }, 401);
+  if (!timingSafeEqual(token, env.APP_TOKEN)) return json({ error: 'unauthorized', message: 'Wrong token' }, 401);
   return null;
 }
 
@@ -160,7 +160,7 @@ async function productLookup(input, opts, ctx) {
   const { product, upstreamDown, statuses } = await lookupProduct(input, opts);
   if (!product && upstreamDown) {
     return json(
-      { error: 'upstream_error', message: `暂时连不上优衣库官网（${statuses.join(', ')}），可以稍后再试或手动填写`, productId: parsed.productId },
+      { error: 'upstream_error', message: `Can't reach uniqlo.com right now (${statuses.join(', ')}). Try again later or enter details manually.`, productId: parsed.productId },
       502,
     );
   }
@@ -168,7 +168,7 @@ async function productLookup(input, opts, ctx) {
     return json(
       {
         error: 'not_found',
-        message: `在优衣库 ${[opts.region, ...opts.fallback.map((o) => o.region)].join(' / ')} 站点都没有找到 ${parsed.productId}`,
+        message: `${parsed.productId} wasn't found on the ${[opts.region, ...opts.fallback.map((o) => o.region)].join(' / ')} sites`,
         productId: parsed.productId,
       },
       404,
@@ -196,7 +196,7 @@ async function productSearch(q, opts, ctx) {
       break;
     }
   }
-  if (!reachable) return json({ error: 'upstream_error', message: '暂时连不上优衣库官网，可以稍后再试' }, 502);
+  if (!reachable) return json({ error: 'upstream_error', message: "Can't reach uniqlo.com right now. Try again later." }, 502);
   const res = json({ q, region, fallback: region !== opts.region, results }, 200, { 'Cache-Control': 'max-age=3600' });
   ctx.waitUntil(caches.default.put(cacheKey, res.clone()));
   return res;
@@ -209,11 +209,11 @@ function rowToEntry(row) {
 }
 
 function sanitize(body) {
-  if (!body || typeof body !== 'object') throw new HttpError(400, '请求内容不是 JSON 对象');
+  if (!body || typeof body !== 'object') throw new HttpError(400, 'Request body must be a JSON object');
   const { id, createdAt, updatedAt, ...data } = body;
-  if (!data.product?.productId) throw new HttpError(400, '缺少 product.productId');
+  if (!data.product?.productId) throw new HttpError(400, 'Missing product.productId');
   const text = JSON.stringify(data);
-  if (text.length > 200_000) throw new HttpError(413, '记录太大');
+  if (text.length > 200_000) throw new HttpError(413, 'Record too large');
   return { productId: String(data.product.productId), text };
 }
 
@@ -221,7 +221,7 @@ async function readBody(request) {
   try {
     return await request.json();
   } catch {
-    throw new HttpError(400, '请求内容不是合法 JSON');
+    throw new HttpError(400, 'Request body is not valid JSON');
   }
 }
 

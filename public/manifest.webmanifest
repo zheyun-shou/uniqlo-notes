@@ -1,13 +1,13 @@
 {
   "name": "UNIQLO FITLOG",
   "short_name": "FITLOG",
-  "description": "记录试穿过的优衣库服装和反馈",
+  "description": "A personal log of Uniqlo clothes you tried on",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
-  "lang": "zh-CN",
+  "lang": "en",
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },

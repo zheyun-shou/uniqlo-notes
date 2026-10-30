@@ -155,8 +155,8 @@ export async function checkWatches(env, opts, { limit = WATCH_BATCH, ids = null 
 
 export async function sendEmail(env, { subject, html }) {
   const to = await getSetting(env, 'alert_email');
-  if (!to) return { ok: false, error: '还没有填写提醒邮箱' };
-  if (!env.RESEND_API_KEY) return { ok: false, error: '服务器还没有设置 RESEND_API_KEY' };
+  if (!to) return { ok: false, error: 'No alert email set yet' };
+  if (!env.RESEND_API_KEY) return { ok: false, error: 'RESEND_API_KEY is not set on the server' };
   try {
     const res = await fetch(RESEND_URL, {
       method: 'POST',
@@ -194,16 +194,16 @@ export function dropEmail(drops, appUrl) {
         <div style="font-size:15px;font-weight:700;color:#1b1b1b">${h(r.name || w.name)}</div>
         <div style="margin:4px 0;font-size:18px;font-weight:700;color:#ff0000">${h(money(r.min, r.currency))}
           ${r.base > r.min ? `<span style="font-size:13px;font-weight:400;color:#7d7d7d;text-decoration:line-through">${h(money(r.base, r.currency))}</span> <span style="font-size:13px">-${off}%</span>` : ''}</div>
-        ${w.target_price != null ? `<div style="font-size:12px;color:#7d7d7d">你的目标价 ${h(money(w.target_price, r.currency))}</div>` : ''}
-        ${r.saleColors.length ? `<div style="font-size:12px;color:#7d7d7d">降价颜色：${h(r.saleColors.join('、'))}</div>` : ''}
-        <div style="margin-top:6px;font-size:13px"><a href="${h(r.url)}" style="color:#1b1b1b">打开官网商品页 ›</a></div>
+        ${w.target_price != null ? `<div style="font-size:12px;color:#7d7d7d">Your target: ${h(money(w.target_price, r.currency))}</div>` : ''}
+        ${r.saleColors.length ? `<div style="font-size:12px;color:#7d7d7d">On sale in: ${h(r.saleColors.join(', '))}</div>` : ''}
+        <div style="margin-top:6px;font-size:13px"><a href="${h(r.url)}" style="color:#1b1b1b">Open on uniqlo.com ›</a></div>
       </td></tr>`;
   });
-  const subject = drops.length === 1 ? `降价提醒：${drops[0].r.name || drops[0].w.name} 现在 ${money(drops[0].r.min, drops[0].r.currency)}` : `降价提醒：${drops.length} 件关注的商品降价了`;
+  const subject = drops.length === 1 ? `Price drop: ${drops[0].r.name || drops[0].w.name} is now ${money(drops[0].r.min, drops[0].r.currency)}` : `Price drop: ${drops.length} watched items are cheaper`;
   const html = `<div style="font-family:Helvetica,Arial,sans-serif;max-width:560px;color:#1b1b1b">
     <div style="font-size:20px;font-weight:700;padding:8px 0 12px">UNIQLO FITLOG</div>
     <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">${items.join('')}</table>
-    ${appUrl ? `<p style="font-size:12px;color:#7d7d7d;border-top:1px solid #dadada;padding-top:12px"><a href="${h(appUrl)}/#/watch" style="color:#7d7d7d">管理降价提醒</a></p>` : ''}
+    ${appUrl ? `<p style="font-size:12px;color:#7d7d7d;border-top:1px solid #dadada;padding-top:12px"><a href="${h(appUrl)}/#/watch" style="color:#7d7d7d">Manage price alerts</a></p>` : ''}
   </div>`;
   return { subject, html };
 }

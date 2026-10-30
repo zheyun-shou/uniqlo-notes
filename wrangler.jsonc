@@ -33,8 +33,18 @@
     // 本站查不到时同时去这些站点查（有的款只在别国官网上架，比如加长款），按顺序取第一个查到的
     "UQ_FALLBACK": "uk/en,us/en,au/en,sg/en,jp/ja",
     // 降价提醒邮件里「管理降价提醒」链接指向的地址
-    "APP_URL": "https://fitlog.zheyuns.com"
+    "APP_URL": "https://fitlog.zheyuns.com",
+    // 试用版：不登录也能用，记录只存在试用者自己的浏览器里，最多 TRIAL_MAX_ITEMS 件；改成 "off" 关闭
+    "TRIAL": "on",
+    "TRIAL_MAX_ITEMS": "10",
+    // 试用版满了以后引导去这里自己部署
+    "REPO_URL": "https://github.com/zheyun-shou/uniqlo-notes"
   },
+
+  // 没登录的请求（试用版查商品、登录）按 IP 限流：每分钟 30 次
+  "ratelimits": [
+    { "name": "PUBLIC_RATE", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }
+  ],
 
   // 自定义域名（域名需在同一个 Cloudflare 账号里，部署时自动创建 DNS 记录和证书）；workers.dev 地址同时保留
   "routes": [{ "pattern": "fitlog.zheyuns.com", "custom_domain": true }],
@@ -43,5 +53,8 @@
   // 降价提醒：每小时查一批关注的商品（每次 4 件，按最久没查的轮流）
   "triggers": { "crons": ["17 * * * *"] }
 
-  // APP_TOKEN（访问口令）、RESEND_API_KEY（降价提醒发邮件）用 `npx wrangler secret put` 或控制台设置，不要写在这里
+  // 以下用 `npx wrangler secret put` 或控制台设置，不要写在这里：
+  //   OWNER_EMAIL     能登录的邮箱（多个用逗号隔开）
+  //   RESEND_API_KEY  发登录邮件和降价提醒
+  //   APP_TOKEN       （可选）旧的口令登录，邮箱登录好用以后可以删掉
 }

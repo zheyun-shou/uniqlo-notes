@@ -2,6 +2,11 @@
 
 const TOKEN_KEY = 'fitlog.token';
 const CACHE_KEY = 'fitlog.entries';
+// 试用版：不登录，记录只存在这个浏览器里
+const TRIAL_KEY = 'fitlog.trial';
+const TRIAL_DATA_KEY = 'fitlog.trial.entries';
+// 登录邮件发出后记住邮箱，切出去看邮件再回来还在输码那一步
+const PENDING_KEY = 'fitlog.pendingEmail';
 
 const CATEGORIES = [
   // [key, 名称, 匹配优衣库分类/商品名的关键词（英文+瑞典语）]
@@ -32,6 +37,8 @@ const fab = document.getElementById('fab');
 
 const state = {
   token: safeGet(TOKEN_KEY),
+  trial: safeGet(TRIAL_KEY) === '1',
+  config: null,
   entries: null,
   filter: { q: '', cat: 'all', verdict: 'all' },
 };
@@ -52,6 +59,16 @@ function esc(s) {
 // 页面大标题：小号大写前缀 + 小写粗体加句点
 function pageHead(eyebrow, title, extra = '') {
   return `<div class="page-head"><div><p class="eyebrow">${esc(eyebrow)}</p><h1>${esc(title)}.</h1></div>${extra}</div>`;
+}
+
+// 试用版提示条：用了几件、存在哪里；满了就引导自己部署
+function trialBar(count, cfg) {
+  const max = cfg.trial.maxItems;
+  const full = count >= max;
+  return `<div class="trial-bar${full ? ' full' : ''}">
+    <span><b>Trial</b> ${count} / ${max} items${full ? ' · full' : ', saved only in this browser'}</span>
+    ${full && cfg.repo ? `<a href="${esc(cfg.repo)}" target="_blank" rel="noopener">Deploy your own ↗</a>` : '<a href="#/settings">About the trial</a>'}
+  </div>`;
 }
 
 function today() {
@@ -136,7 +153,15 @@ class ApiError extends Error {
   }
 }
 
+function isTrial() {
+  return state.trial && !state.token;
+}
+
 async function api(path, { method = 'GET', body } = {}) {
+  if (isTrial()) {
+    if (path.startsWith('/entries')) return trialApi(path, { method, body });
+    if (!/^\/(product|search|config|auth)\b/.test(path)) throw new ApiError(403, { error: 'trial', message: 'Not available in the trial' });
+  }
   const res = await fetch(`/api${path}`, {
     method,
     headers: {
@@ -157,12 +182,79 @@ async function api(path, { method = 'GET', body } = {}) {
   return data;
 }
 
+// 服务器公开的配置：登录方式、试用版上限、自己部署的仓库地址
+async function getConfig() {
+  if (state.config) return state.config;
+  try {
+    const res = await fetch('/api/config');
+    if (res.ok) state.config = await res.json();
+  } catch {}
+  return state.config || { emailLogin: true, tokenLogin: false, trial: { enabled: true, maxItems: 10 }, repo: null };
+}
+
+// ---------- 试用版：记录存在 localStorage，接口形状和服务器一样 ----------
+
+function trialEntries() {
+  try {
+    return JSON.parse(safeGet(TRIAL_DATA_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function trialSave(list) {
+  try {
+    localStorage.setItem(TRIAL_DATA_KEY, JSON.stringify(list));
+  } catch {
+    throw new ApiError(507, { message: 'This browser blocked or ran out of local storage' });
+  }
+}
+
+async function trialApi(path, { method, body }) {
+  const list = trialEntries();
+  const id = path.split('/')[2] ? decodeURIComponent(path.split('/')[2]) : null;
+  const now = Date.now();
+  const clean = (b) => {
+    if (!b?.product?.productId) throw new ApiError(400, { message: 'Missing product.productId' });
+    const { id: _id, createdAt, updatedAt, ...data } = b;
+    return { data, createdAt };
+  };
+  if (!id && method === 'GET') return { entries: [...list].sort((a, b) => b.updatedAt - a.updatedAt) };
+  if (!id && method === 'POST') {
+    const { maxItems } = (await getConfig()).trial;
+    if (list.length >= maxItems) throw new ApiError(403, { error: 'trial_limit', message: `The trial holds up to ${maxItems} items` });
+    const { data, createdAt } = clean(body);
+    const entry = { id: crypto.randomUUID(), ...data, createdAt: Number.isFinite(createdAt) ? createdAt : now, updatedAt: now };
+    trialSave([...list, entry]);
+    return { entry };
+  }
+  const i = list.findIndex((e) => e.id === id);
+  if (i < 0) throw new ApiError(404, { error: 'not_found', message: 'Record not found' });
+  if (method === 'GET') return { entry: list[i] };
+  if (method === 'PUT') {
+    list[i] = { id, ...clean(body).data, createdAt: list[i].createdAt, updatedAt: now };
+    trialSave(list);
+    return { entry: list[i] };
+  }
+  if (method === 'DELETE') {
+    list.splice(i, 1);
+    trialSave(list);
+    return { ok: true };
+  }
+  throw new ApiError(405, { message: 'Not supported' });
+}
+
+// 离线副本只给登录用户存；试用版的记录本来就在本地
+function cacheEntries(list) {
+  if (!isTrial()) safeSet(CACHE_KEY, list ? JSON.stringify(list) : null);
+}
+
 async function loadEntries(force = false) {
   if (state.entries && !force) return state.entries;
   try {
     const { entries } = await api('/entries');
     state.entries = entries;
-    safeSet(CACHE_KEY, JSON.stringify(entries));
+    cacheEntries(entries);
   } catch (e) {
     if (e.status === 401) throw e;
     const cached = safeGet(CACHE_KEY);
@@ -179,13 +271,14 @@ function upsertLocal(entry) {
   if (i >= 0) list.splice(i, 1);
   list.unshift(entry);
   state.entries = list;
-  safeSet(CACHE_KEY, JSON.stringify(list));
+  cacheEntries(list);
 }
 
 // ---------- 路由 ----------
 
 const routes = [
   [/^#\/login$/, renderLogin],
+  [/^#\/auth\/(.+)$/, (m) => renderAuthLink(m[1])],
   [/^#\/new(?:\/(.+))?$/, (m) => renderNew(m[1] ? decodeURIComponent(m[1]) : '')],
   [/^#\/entry\/([^/]+)$/, (m) => renderDetail(m[1])],
   [/^#\/edit\/([^/]+)$/, (m) => renderEdit(m[1])],
@@ -196,8 +289,15 @@ const routes = [
 
 async function router() {
   const hash = location.hash || '#/';
-  if (!state.token && hash !== '#/login') {
+  document.body.classList.toggle('trial', isTrial());
+  document.body.classList.toggle('guest', !state.token);
+  if (!state.token && !state.trial && !/^#\/(login|auth\/)/.test(hash)) {
     location.hash = '#/login';
+    return;
+  }
+  // 试用版没有降价提醒
+  if (isTrial() && hash === '#/watch') {
+    location.hash = '#/';
     return;
   }
   fab.hidden = !(hash === '#/' || hash === '' || hash === '#');
@@ -219,35 +319,158 @@ window.addEventListener('hashchange', router);
 
 // ---------- 登录 ----------
 
-function renderLogin() {
+async function renderLogin() {
   fab.hidden = true;
+  const cfg = await getConfig();
+  const pending = (() => {
+    try {
+      const p = JSON.parse(safeGet(PENDING_KEY));
+      return p && Date.now() - p.at < 15 * 60 * 1000 ? p.email : null;
+    } catch {
+      return null;
+    }
+  })();
+  const trialCount = trialEntries().length;
+
   app.innerHTML = `
-    <section class="panel" style="max-width:420px;margin:40px auto">
+    ${pageHead('Welcome to', 'fitlog')}
+    <section class="panel narrow" id="signin"></section>
+    ${
+      cfg.trial.enabled
+        ? `<section class="panel narrow">
+            <h2>Just looking?</h2>
+            <p style="margin:0 0 14px">Try FITLOG without an account. You can log up to ${cfg.trial.maxItems} items, and they're saved only in this browser.</p>
+            <div class="actions" style="justify-content:flex-start;margin-top:0"><button class="btn primary" id="try">${trialCount ? `Continue trial (${trialCount})` : 'Try it without an account'}</button></div>
+            ${cfg.repo ? `<p class="hint">Want your own? It's free to deploy on Cloudflare: <a href="${esc(cfg.repo)}" target="_blank" rel="noopener">see the README ↗</a></p>` : ''}
+          </section>`
+        : ''
+    }`;
+
+  app.querySelector('#try')?.addEventListener('click', () => {
+    state.trial = true;
+    state.entries = null;
+    safeSet(TRIAL_KEY, '1');
+    location.hash = '#/';
+  });
+
+  const box = app.querySelector('#signin');
+  const drawEmail = (msg = '') => {
+    box.innerHTML = `
+      <h2>Sign in with email</h2>
+      <form id="email-form" class="lookup">
+        <input type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
+        <button class="btn primary">Send code</button>
+      </form>
+      <p class="hint">We'll email you a 6-digit code and a sign-in link. No password needed.</p>
+      <p class="error" id="err" ${msg ? '' : 'hidden'}>${esc(msg)}</p>
+      ${cfg.tokenLogin ? '<p class="hint"><button type="button" class="linkish" id="use-token" style="margin:0">Use an access token instead</button></p>' : ''}`;
+    const form = box.querySelector('#email-form');
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const email = form.email.value.trim();
+      const btn = form.querySelector('button');
+      const err = box.querySelector('#err');
+      btn.disabled = true;
+      err.hidden = true;
+      try {
+        await api('/auth/request', { method: 'POST', body: { email } });
+        safeSet(PENDING_KEY, JSON.stringify({ email, at: Date.now() }));
+        drawCode(email);
+      } catch (e) {
+        err.hidden = false;
+        err.textContent = e.message;
+        btn.disabled = false;
+      }
+    });
+    box.querySelector('#use-token')?.addEventListener('click', drawToken);
+  };
+
+  const drawCode = (email) => {
+    box.innerHTML = `
+      <h2>Check your inbox</h2>
+      <p style="margin:0 0 14px">We sent a code to <b>${esc(email)}</b>. Enter it here, or tap the link in the email on this device.</p>
+      <form id="code-form" class="lookup">
+        <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" placeholder="123456" required>
+        <button class="btn primary">Sign in</button>
+      </form>
+      <p class="error" id="err" hidden></p>
+      <p class="hint"><button type="button" class="linkish" id="other" style="margin:0">Use a different email</button></p>`;
+    const form = box.querySelector('#code-form');
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const btn = form.querySelector('button');
+      const err = box.querySelector('#err');
+      btn.disabled = true;
+      err.hidden = true;
+      try {
+        const r = await api('/auth/verify', { method: 'POST', body: { email, code: form.code.value } });
+        signedIn(r.session);
+      } catch (e) {
+        err.hidden = false;
+        err.textContent = e.message;
+        btn.disabled = false;
+      }
+    });
+    box.querySelector('#other').addEventListener('click', () => {
+      safeSet(PENDING_KEY, null);
+      drawEmail();
+    });
+    form.code.focus();
+  };
+
+  const drawToken = () => {
+    box.innerHTML = `
       <h2>Enter access token</h2>
-      <p class="hint" style="margin:0 0 12px">The value set with <code>wrangler secret put APP_TOKEN</code> when deploying. It is only stored on this device.</p>
+      <p class="hint" style="margin:0 0 12px">The APP_TOKEN secret set on the server. It is only stored on this device.</p>
       <form id="login" class="lookup">
         <input type="password" name="token" placeholder="APP_TOKEN" autocomplete="current-password" required>
         <button class="btn primary">Enter</button>
       </form>
       <p class="error" id="err" hidden></p>
-    </section>`;
-  const form = app.querySelector('#login');
-  form.addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    state.token = form.token.value.trim();
-    const err = app.querySelector('#err');
-    try {
-      await api('/ping');
-      safeSet(TOKEN_KEY, state.token);
-      state.entries = null;
-      location.hash = '#/';
-    } catch (e) {
-      err.hidden = false;
-      err.textContent = e.status === 401 ? 'Wrong token' : e.message;
-      if (e.status === 401) location.hash = '#/login';
-    }
-  });
-  form.token.focus();
+      <p class="hint"><button type="button" class="linkish" id="back-email" style="margin:0">Sign in with email instead</button></p>`;
+    const form = box.querySelector('#login');
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const token = form.token.value.trim();
+      const err = box.querySelector('#err');
+      try {
+        const res = await fetch('/api/ping', { headers: { Authorization: `Bearer ${token}` } });
+        if (res.status === 401) throw new Error('Wrong token');
+        if (!res.ok) throw new Error(`Request failed (${res.status})`);
+        signedIn(token);
+      } catch (e) {
+        err.hidden = false;
+        err.textContent = e.message;
+      }
+    });
+    box.querySelector('#back-email').addEventListener('click', () => drawEmail());
+    form.token.focus();
+  };
+
+  if (pending) drawCode(pending);
+  else drawEmail();
+}
+
+// 邮件里的登录链接：#/auth/<token>
+async function renderAuthLink(token) {
+  fab.hidden = true;
+  app.innerHTML = `${pageHead('Signing', 'in')}<p class="hint">One moment…</p>`;
+  try {
+    const r = await api('/auth/verify', { method: 'POST', body: { token } });
+    signedIn(r.session);
+  } catch (e) {
+    app.innerHTML = `${pageHead('Sign-in', 'failed')}<p>${esc(e.message)}</p><p><a class="btn" href="#/login">Back to sign in</a></p>`;
+  }
+}
+
+function signedIn(token) {
+  state.token = token;
+  state.trial = false;
+  state.entries = null;
+  safeSet(TOKEN_KEY, token);
+  safeSet(TRIAL_KEY, null);
+  safeSet(PENDING_KEY, null);
+  location.hash = '#/';
 }
 
 // ---------- 列表 ----------
@@ -256,8 +479,12 @@ async function renderList() {
   app.innerHTML = `${pageHead('My', 'closet')}<div class="grid" style="margin-top:16px">${'<div class="card"><div class="thumb skeleton"></div><div class="body"><div class="skeleton" style="height:14px"></div></div></div>'.repeat(4)}</div>`;
   const entries = await loadEntries();
 
+  const cfg = isTrial() ? await getConfig() : null;
+  const bar = cfg ? trialBar(entries.length, cfg) : '';
+
   if (!entries.length) {
     app.innerHTML = `
+      ${bar}
       <div class="empty">
         <p class="eyebrow">Your closet is</p>
         <h2>empty.</h2>
@@ -278,6 +505,7 @@ async function renderList() {
     `<button class="chip" data-group="${group}" data-key="${key}" aria-pressed="${f[group] === key}">${esc(label)}${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
 
   app.innerHTML = `
+    ${bar}
     ${pageHead('My', 'closet', '<span class="count" id="count"></span>')}
     <input class="search" type="search" placeholder="Search my closet and uniqlo.com…" value="${esc(f.q)}" aria-label="Search">
     <div class="tabs" role="group" aria-label="Category">
@@ -288,7 +516,7 @@ async function renderList() {
       ${chip('verdict', 'all', 'All verdicts')}
       ${Object.entries(VERDICT).filter(([k]) => verdictCounts[k]).map(([k, n]) => chip('verdict', k, n, verdictCounts[k])).join('')}
     </div>
-    <div class="want-bar" id="want-bar" hidden><span class="hint">Get an email when any of these drops in price</span><button class="btn primary" id="watch-want">Watch all prices</button></div>
+    <div class="want-bar owner-only" id="want-bar" hidden><span class="hint">Get an email when any of these drops in price</span><button class="btn primary" id="watch-want">Watch all prices</button></div>
     <div class="grid" id="grid"></div>
     <section id="online" hidden></section>`;
 
@@ -397,6 +625,23 @@ function cardHtml(e) {
 // ---------- 新建 ----------
 
 async function renderNew(prefill) {
+  if (isTrial()) {
+    const [entries, cfg] = await Promise.all([loadEntries(), getConfig()]);
+    if (entries.length >= cfg.trial.maxItems) {
+      app.innerHTML = `
+        <a class="back" href="#/">‹ Back</a>
+        ${pageHead('Your trial is', 'full')}
+        <section class="panel narrow">
+          <p style="margin:0 0 14px">The trial holds up to ${cfg.trial.maxItems} items. To keep logging, deploy your own copy of FITLOG. It runs on a free Cloudflare account, and the README walks you through it.</p>
+          <p class="hint" style="margin:0 0 16px">Export your items first, then import the file into your own copy under Settings → Backup.</p>
+          <div class="actions" style="justify-content:flex-start;margin-top:0">
+            ${cfg.repo ? `<a class="btn primary" href="${esc(cfg.repo)}" target="_blank" rel="noopener">Deploy your own ↗</a>` : ''}
+            <a class="btn" href="#/settings">Export my items</a>
+          </div>
+        </section>`;
+      return;
+    }
+  }
   app.innerHTML = `
     <a class="back" href="#/">‹ Back</a>
     ${pageHead('Add a new', 'item')}
@@ -886,7 +1131,7 @@ async function renderDetail(id) {
     try {
       await api(`/entries/${encodeURIComponent(e.id)}`, { method: 'DELETE' });
       state.entries = state.entries.filter((x) => x.id !== e.id);
-      safeSet(CACHE_KEY, JSON.stringify(state.entries));
+      cacheEntries(state.entries);
       toast('Deleted');
       location.hash = '#/';
     } catch (err) {
@@ -899,7 +1144,7 @@ async function renderDetail(id) {
 
 // 只有本站官网查到的商品能跟踪价格（手动填写的、别国站点的不行）
 function canWatch(p) {
-  return p && p.source === 'api' && !p.region && /^[A-Z]\d{6}-\d{3}$/.test(p.productId || '');
+  return !isTrial() && p && p.source === 'api' && !p.region && /^[A-Z]\d{6}-\d{3}$/.test(p.productId || '');
 }
 
 // 「Checked 3 h ago」/「Not checked yet」
@@ -1097,9 +1342,11 @@ function watchCard(w) {
 
 async function renderSettings() {
   const entries = await loadEntries().catch(() => state.entries || []);
+  const trial = isTrial();
+  const cfg = await getConfig();
   let info = null;
   let archive = null;
-  try { [info, archive] = await Promise.all([api('/ping'), api('/archive')]); } catch {}
+  if (!trial) try { [info, archive] = await Promise.all([api('/ping'), api('/archive')]); } catch {}
   const count = (k) => entries.filter((e) => e.verdict === k).length;
 
   app.innerHTML = `
@@ -1115,7 +1362,17 @@ async function renderSettings() {
       </div>
       ${info ? `<p class="hint">Uniqlo site: ${esc(info.region)} / ${esc(info.lang)} (change it under vars in wrangler.jsonc)</p>` : ''}
     </section>
-    <section class="panel">
+    ${
+      trial
+        ? `<section class="panel">
+            <h2>About the trial</h2>
+            <p style="margin:0 0 10px">You're using FITLOG without an account. Your items (${entries.length} of ${cfg.trial.maxItems}) are saved only in this browser. They stay when you refresh or close it, but not if you clear site data, use a private window, or switch devices. On iPhone, add FITLOG to your home screen so Safari doesn't clear it after a week without visits.</p>
+            <p class="hint" style="margin:0 0 14px">Price alerts and image archiving aren't part of the trial. To get everything with no limit, deploy your own copy. It's free on Cloudflare.</p>
+            ${cfg.repo ? `<div class="actions" style="justify-content:flex-start;margin-top:0"><a class="btn primary" href="${esc(cfg.repo)}" target="_blank" rel="noopener">Deploy your own ↗</a></div>` : ''}
+          </section>`
+        : ''
+    }
+    <section class="panel owner-only">
       <h2>Image archive</h2>
       ${
         !archive
@@ -1136,10 +1393,13 @@ async function renderSettings() {
       </div>
     </section>
     <section class="panel">
-      <h2>Device</h2>
+      <h2>${trial ? 'Trial data' : 'Device'}</h2>
       <div class="actions" style="justify-content:flex-start">
-        <button class="btn" id="refresh">Sync again</button>
-        <button class="btn danger" id="logout">Log out</button>
+        ${
+          trial
+            ? '<a class="btn" href="#/login">Sign in</a><button class="btn danger" id="clear-trial">Delete trial data</button>'
+            : '<button class="btn" id="refresh">Sync again</button><button class="btn danger" id="logout">Log out</button>'
+        }
       </div>
     </section>`;
 
@@ -1159,13 +1419,20 @@ async function renderSettings() {
       const data = JSON.parse(await file.text());
       const list = Array.isArray(data) ? data : data.entries || [];
       let ok = 0;
+      let full = false;
       for (const item of list) {
         if (!item?.product?.productId) continue;
-        await api('/entries', { method: 'POST', body: item });
+        try {
+          await api('/entries', { method: 'POST', body: item });
+        } catch (e) {
+          if (e.body?.error !== 'trial_limit') throw e;
+          full = true;
+          break;
+        }
         ok++;
       }
       await loadEntries(true);
-      toast(`Imported ${ok}`);
+      toast(full ? `Imported ${ok}. The trial is full` : `Imported ${ok}`);
       renderSettings();
     } catch (e) {
       toast(`Import failed: ${e.message}`);
@@ -1192,13 +1459,23 @@ async function renderSettings() {
     renderSettings();
   });
 
-  app.querySelector('#refresh').addEventListener('click', async () => {
+  app.querySelector('#clear-trial')?.addEventListener('click', () => {
+    if (!confirm('Delete all trial items from this browser? Export them first if you want to keep them.')) return;
+    safeSet(TRIAL_DATA_KEY, null);
+    safeSet(TRIAL_KEY, null);
+    state.trial = false;
+    state.entries = null;
+    location.hash = '#/login';
+  });
+
+  app.querySelector('#refresh')?.addEventListener('click', async () => {
     await loadEntries(true);
     toast('Synced');
     renderSettings();
   });
 
-  app.querySelector('#logout').addEventListener('click', () => {
+  app.querySelector('#logout')?.addEventListener('click', async () => {
+    await api('/auth/logout', { method: 'POST' }).catch(() => {});
     state.token = null;
     state.entries = null;
     safeSet(TOKEN_KEY, null);

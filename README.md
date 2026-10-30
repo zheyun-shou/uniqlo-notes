@@ -17,6 +17,8 @@ A personal closet log for Uniqlo clothes, built as a PWA. Use it to keep track o
 - **Installable and offline-friendly.** Add it to your phone's home screen. Without a connection it still shows your last synced entries and any images you've already seen.
 - **Light and dark themes.** Oxblood on white, or white on oxblood in dark mode, with a toggle in the top bar. The default follows your system setting.
 - **Backup.** Export and import your data as JSON.
+- **Email sign-in.** The owner signs in with a one-time code or link sent by email. There's no password.
+- **Try without an account.** Visitors can log up to 10 items. Their items are saved only in their own browser, and when the trial is full they're pointed here to deploy their own copy.
 
 FITLOG looks products up on the Swedish site (`uniqlo.com/se`) by default. You can point it at another region in `wrangler.jsonc`.
 
@@ -26,7 +28,8 @@ Everything runs in a single Cloudflare Worker. The free plan is enough.
 
 ```
 public/        Front end (plain HTML/CSS/JS, no build step; bundled into the Worker and served by src/static.js)
-src/worker.js  API: auth, entries CRUD, product lookup and search, price alerts
+src/worker.js  API: routing, entries CRUD, product lookup and search, price alerts
+src/auth.js    Email sign-in and sessions
 src/uniqlo.js  Fetches and parses Uniqlo product and search pages
 src/watch.js   Price checks and alert emails
 src/archive.js Copies product images into R2
@@ -35,7 +38,7 @@ migrations/    D1 (SQLite) schema
 
 - **Product lookups.** Browsers can't fetch uniqlo.com cross-origin, so the Worker requests product pages on the app's behalf and caches the results at the edge for a day. The Worker identifies itself honestly in its User-Agent and does not pretend to be a browser. If Uniqlo refuses those requests, lookups fail and you can enter the details by hand.
 - **Storage.** Entries are stored in Cloudflare D1. Each entry keeps a snapshot of the product, so your records survive when a product is delisted.
-- **Access.** There is one user, and a single access token (`APP_TOKEN`) protects the whole API.
+- **Access.** See [Sign-in and the trial](#sign-in-and-the-trial).
 - **Archived images.** Images in R2 are named by a hash of the original URL, so each image is stored only once. Pages prefer the archived copy and fall back to the original URL if it's unavailable. Archived images are served publicly under `/media/...`, because `<img>` tags can't send a token. They are Uniqlo's public product images anyway.
 - **Font and theme.** The UI uses Space Grotesk (SIL Open Font License). The font file lives in `public/fonts/` and is bundled into the Worker, so no external font service is needed.
 
@@ -71,17 +74,25 @@ npx wrangler r2 bucket create uniqlo-fitlog-images
 
 To skip R2, delete the `r2_buckets` block from `wrangler.jsonc`. Everything else still works; images just won't be archived.
 
-Set an access token. Any long random string works; you'll type it in when you sign in.
+In `wrangler.jsonc`, delete the `routes` block (it binds this author's own domain), and update `APP_URL` and `REPO_URL` under `vars`.
+
+Set up sign-in. You need a [Resend](https://resend.com) API key to send sign-in emails (see [Price alerts](#price-alerts) for how to get one). Each command prompts for the value:
 
 ```bash
-npx wrangler secret put APP_TOKEN
+npx wrangler secret put OWNER_EMAIL
+```
+
+```bash
+npx wrangler secret put RESEND_API_KEY
 ```
 
 ```bash
 npm run deploy
 ```
 
-You'll get a URL like `https://uniqlo-fitlog.<your-subdomain>.workers.dev`. Open it on your phone, enter the token, and use "Add to Home Screen".
+You'll get a URL like `https://uniqlo-fitlog.<your-subdomain>.workers.dev`. Open it on your phone, sign in with your email, and use "Add to Home Screen".
+
+If you'd rather not set up email, set an `APP_TOKEN` secret instead (any long random string) and choose "Use an access token instead" on the sign-in page.
 
 ## Local development
 
@@ -104,6 +115,26 @@ Run the parser unit tests:
 ```bash
 npm test
 ```
+
+## Sign-in and the trial
+
+**Owner sign-in.** Only addresses listed in the `OWNER_EMAIL` secret can sign in; separate several with commas. Enter your email and you'll get a 6-digit code plus a sign-in link, both valid for 15 minutes.
+
+- Type the code, or tap the link on the device you're signing in on. On iPhone, a home-screen app doesn't share storage with Safari, so the code is the way to sign in there.
+- A session lasts a year on that device. "Log out" in Settings ends it.
+- The database stores only SHA-256 hashes of codes, links and session tokens.
+- A code allows 5 wrong attempts, and an address can request at most 5 emails per 15 minutes.
+- Removing an address from `OWNER_EMAIL` also ends its existing sessions.
+
+**APP_TOKEN (optional).** If the `APP_TOKEN` secret is set, the old token sign-in still works. Once email sign-in works, you can delete that secret in the dashboard.
+
+**Trial.** Visitors who aren't signed in can choose "Try it without an account".
+
+- Their items are stored in `localStorage` in their browser, never on the server. Up to `TRIAL_MAX_ITEMS` items (10 by default).
+- Product lookup and uniqlo.com search work for them. Price alerts and image archiving don't.
+- When the trial is full, they're pointed to `REPO_URL` and can export their items as JSON to import into their own copy.
+- Requests from signed-out visitors (lookups, search, sign-in) are rate-limited to 30 per minute per IP via the `PUBLIC_RATE` binding.
+- Set `"TRIAL": "off"` in `vars` to turn the trial off.
 
 ## When a product can't be found
 

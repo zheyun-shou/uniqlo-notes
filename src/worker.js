@@ -2,6 +2,7 @@ import { fetchSearchPage, fetchUpstream, lookupProduct, parseProductInput, parse
 import { archiveBacklog, archiveEntry, archiveStatus, serveMedia } from './archive.js';
 import { serveStatic } from './static.js';
 import { checkWatches, emailStatus, getWatch, listWatches, removeWatch, sendEmail, setSetting, upsertWatch } from './watch.js';
+import { authConfig, checkSession, logout, requestLogin, verifyLogin } from './auth.js';
 
 const PRODUCT_CACHE_SECONDS = 60 * 60 * 24;
 
@@ -13,8 +14,15 @@ export default {
     if (!url.pathname.startsWith('/api/')) return serveStatic(url.pathname);
 
     try {
-      const authError = checkAuth(request, env);
-      if (authError) return authError;
+      const bearer = bearerToken(request);
+      const auth = await checkSession(env, bearer);
+      const pub = await publicRoute(request, env, ctx, url, auth);
+      if (pub) return pub;
+      if (!auth) return json({ error: 'unauthorized', message: 'Please sign in' }, 401);
+      if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
+        if (auth.via === 'email') await logout(env, bearer);
+        return json({ ok: true });
+      }
       return await route(request, env, ctx, url);
     } catch (e) {
       console.error(e);
@@ -32,6 +40,64 @@ function optsFrom(env) {
   return { region: env.UQ_REGION || 'se', lang: env.UQ_LANG || 'en', fallback: parseFallback(env.UQ_FALLBACK) };
 }
 
+// 不用登录的接口：配置、登录，以及（试用开着时）商品查询和搜索。没登录的请求按 IP 限流
+async function publicRoute(request, env, ctx, url, auth) {
+  const parts = url.pathname.split('/').filter(Boolean).slice(1);
+  const method = request.method;
+  const opts = optsFrom(env);
+  const ip = request.headers.get('CF-Connecting-IP') || 'local';
+
+  if (parts[0] === 'config' && method === 'GET') {
+    return json({ ...authConfig(env), signedIn: Boolean(auth), trial: { enabled: trialEnabled(env), maxItems: trialMax(env) }, repo: env.REPO_URL || null });
+  }
+
+  if (parts[0] === 'auth' && method === 'POST' && (parts[1] === 'request' || parts[1] === 'verify')) {
+    if (await rateLimited(env, `auth:${ip}`)) return tooMany();
+    const body = await request.json().catch(() => ({}));
+    const r = parts[1] === 'request' ? await requestLogin(env, body.email, url.origin) : await verifyLogin(env, body);
+    return json(r.body, r.status);
+  }
+
+  const lookup = parts[0] === 'product' && parts[1] && !parts[2];
+  const search = parts[0] === 'search' && !parts[1];
+  if ((lookup || search) && method === 'GET' && (auth || trialEnabled(env))) {
+    if (!auth && (await rateLimited(env, `lookup:${ip}`))) return tooMany();
+    if (lookup) {
+      const input = decodeURIComponent(parts[1]);
+      if (!parseProductInput(input)) return json({ error: 'bad_id', message: 'No 6-digit product number found' }, 400);
+      return productLookup(input, opts, ctx);
+    }
+    const q = (url.searchParams.get('q') || '').trim().slice(0, 100);
+    if (!q) return json({ error: 'bad_query', message: 'Enter a product name to search' }, 400);
+    return productSearch(q, opts, ctx);
+  }
+  return null;
+}
+
+function trialEnabled(env) {
+  return env.TRIAL !== 'off';
+}
+
+function trialMax(env) {
+  return Number(env.TRIAL_MAX_ITEMS) || 10;
+}
+
+async function rateLimited(env, key) {
+  if (!env.PUBLIC_RATE) return false;
+  const { success } = await env.PUBLIC_RATE.limit({ key });
+  return !success;
+}
+
+function tooMany() {
+  return json({ error: 'rate_limited', message: 'Too many requests. Wait a minute and try again.' }, 429);
+}
+
+function bearerToken(request) {
+  const header = request.headers.get('Authorization') || '';
+  return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+}
+
+// 需要登录的接口
 async function route(request, env, ctx, url) {
   const parts = url.pathname.split('/').filter(Boolean).slice(1); // 去掉 "api"
   const method = request.method;
@@ -52,7 +118,6 @@ async function route(request, env, ctx, url) {
       };
       return json(await fetchUpstream(input, o));
     }
-    return productLookup(input, opts, ctx);
   }
 
   if (parts[0] === 'search' && method === 'GET') {
@@ -62,7 +127,6 @@ async function route(request, env, ctx, url) {
       const page = await fetchSearchPage(q, opts);
       return json({ url: page.url, status: page.status, length: page.html.length, results: parseSearchResults(page.html) });
     }
-    return productSearch(q, opts, ctx);
   }
 
   if (parts[0] === 'watches') {
@@ -114,27 +178,6 @@ async function route(request, env, ctx, url) {
   }
 
   return json({ error: 'not_found' }, 404);
-}
-
-// ---------- 鉴权：单用户口令 ----------
-
-function checkAuth(request, env) {
-  if (!env.APP_TOKEN) {
-    return json({ error: 'not_configured', message: 'APP_TOKEN is not set on the server. Run: wrangler secret put APP_TOKEN' }, 500);
-  }
-  const header = request.headers.get('Authorization') || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  if (!timingSafeEqual(token, env.APP_TOKEN)) return json({ error: 'unauthorized', message: 'Wrong token' }, 401);
-  return null;
-}
-
-function timingSafeEqual(a, b) {
-  const enc = new TextEncoder();
-  const x = enc.encode(a);
-  const y = enc.encode(b);
-  let diff = x.length ^ y.length;
-  for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] || 0) ^ (y[i] || 0);
-  return diff === 0;
 }
 
 // ---------- 商品查询（带边缘缓存） ----------

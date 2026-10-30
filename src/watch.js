@@ -153,8 +153,9 @@ export async function checkWatches(env, opts, { limit = WATCH_BATCH, ids = null 
 
 // ---------- 邮件 ----------
 
-export async function sendEmail(env, { subject, html }) {
-  const to = await getSetting(env, 'alert_email');
+/** 发邮件；不指定 to 就发到降价提醒邮箱 */
+export async function sendEmail(env, { subject, html, to }) {
+  to = to || (await getSetting(env, 'alert_email'));
   if (!to) return { ok: false, error: 'No alert email set yet' };
   if (!env.RESEND_API_KEY) return { ok: false, error: 'RESEND_API_KEY is not set on the server' };
   try {

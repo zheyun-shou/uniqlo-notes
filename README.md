@@ -1,40 +1,47 @@
-# UNIQLO FITLOG（试穿手记）
+# UNIQLO FITLOG
 
-记录自己试穿过的优衣库衣服和反馈的个人 PWA，主要功能：
+A personal closet log for Uniqlo clothes, built as a PWA. Use it to keep track of what you tried on, bought or want, and how each piece fit.
 
-- 输入吊牌或官网上的 **6 位商品编号**，或者输入**英文商品名**搜索（吊牌编号和官网编号不一样时很有用），也可以直接粘贴官网链接，自动查出名称、官网分类、价格、材质、可选颜色和尺码，以及各颜色的商品图
-- 记录试穿日期、门店、颜色、尺码、尺码感受（偏小/合适/偏大）、长度、评分、结论（已购买/想买/想试/再看看/不买）、原价和购买价、优缺点和标签
-- 优缺点和标签里填过的内容按逗号拆成常用短语，下次点一下就能填入，不用重复打字
-- 根据官网分类自动归入「T恤/上衣、衬衫、针织、卫衣、外套、羽绒、裤子、裙子、内衣、家居服、配饰」，归错了可以手动改
-- 界面为英文（主页叫 My Closet，不一定试穿过的衣服也能记）。首页搜索框同时搜自己的记录和 uniqlo.com，点官网结果直接开始记录
-- 按分类和结论筛选，全文搜索；同一款试过多次（比如不同尺码）会互相关联显示
-- **官网图片存档**：保存记录时自动把官网商品图复制一份到你自己的 Cloudflare R2，商品下架、官网删图后照样能看
-- 可以添加到手机主屏幕使用；没网时能看上次同步下来的记录和看过的图片
-- 支持导出/导入 JSON 备份
+> An unofficial personal project. It is not affiliated with or endorsed by Uniqlo / Fast Retailing.
 
-默认查询瑞典站（`uniqlo.com/se`），可以在 `wrangler.jsonc` 里改成其他站点。
+## Features
 
-## 架构
+- **Product lookup.** Enter the 6-digit product number from the tag or the website, search by English product name, or paste a product link. FITLOG fills in the name, site category, price, material, available colors and sizes, and images for each color. Name search helps when the number on the tag differs from the one online.
+- **Notes for each item.** Date, store, color, size, fit (runs small / true to size / runs large), length, rating, verdict (Bought / Want / To try / Maybe / Pass), original price, price paid, likes, dislikes and tags.
+- **Reusable phrases.** Whatever you type into likes, dislikes or tags is split at commas and kept as tap-to-insert phrases, so you never type the same note twice.
+- **Automatic categories.** Items are sorted into T-shirts & Tops, Shirts, Knitwear, Sweats & Fleece, Outerwear, Down & Padded, Bottoms, Skirts & Dresses, Innerwear, Loungewear and Accessories based on the site category. You can change the category by hand.
+- **One search box.** The home page search looks through your closet and uniqlo.com at the same time. Tap an online result to start logging it.
+- **Filtering.** Filter by category and verdict, and search across all fields. Several entries for the same product (for example, different sizes) link to each other.
+- **Price alerts.** Watch any item, or every "Want" item in one tap, and get an email when its price drops.
+- **Image archive.** When you save an entry, the product images are copied into your own Cloudflare R2 bucket, so they still show after Uniqlo removes them.
+- **Installable and offline-friendly.** Add it to your phone's home screen. Without a connection it still shows your last synced entries and any images you've already seen.
+- **Light and dark themes.** Oxblood on white, or white on oxblood in dark mode, with a toggle in the top bar. The default follows your system setting.
+- **Backup.** Export and import your data as JSON.
 
-所有部分都放在一个 Cloudflare Worker 里，免费套餐就够用：
+FITLOG looks products up on the Swedish site (`uniqlo.com/se`) by default. You can point it at another region in `wrangler.jsonc`.
+
+## Architecture
+
+Everything runs in a single Cloudflare Worker. The free plan is enough.
 
 ```
-public/        前端（原生 HTML/CSS/JS，无需构建；部署时打包进 Worker，由 src/static.js 返回）
-src/worker.js  API：鉴权、试穿记录增删改查、商品查询
-src/uniqlo.js  读取优衣库官网商品页并整理数据
-src/archive.js 官网图片存档到 R2
-migrations/    D1（SQLite）表结构
+public/        Front end (plain HTML/CSS/JS, no build step; bundled into the Worker and served by src/static.js)
+src/worker.js  API: auth, entries CRUD, product lookup and search, price alerts
+src/uniqlo.js  Fetches and parses Uniqlo product and search pages
+src/watch.js   Price checks and alert emails
+src/archive.js Copies product images into R2
+migrations/    D1 (SQLite) schema
 ```
 
-- 浏览器不能直接跨域请求优衣库官网，所以商品查询由 Worker 代发，结果在边缘缓存 1 天。Worker 如实标明自己的身份（User-Agent），不伪装成浏览器；如果优衣库拒绝这类请求，查询会失败，可以改用手动填写。
-- 界面配色是白底、酒红字，右上角可以切换浅色/深色（默认跟随系统）。字体用 Space Grotesk（SIL Open Font License），放在 `public/fonts/`，同样打包进 Worker，不依赖外部字体服务。
-- 记录存在 Cloudflare D1。每条记录都会保存一份商品快照，商品下架后记录也不会丢。
-- 只有一个用户，用一个访问口令（`APP_TOKEN`）保护全部 API。
-- 图片存档在 R2 里，以原图地址的哈希命名，同一张图只存一份。页面优先显示存档图，存档不可用时回退到官网原图。存档图通过 `/media/...` 公开访问，因为 `<img>` 标签没法带口令；这些本来就是官网公开的商品图。
+- **Product lookups.** Browsers can't fetch uniqlo.com cross-origin, so the Worker requests product pages on the app's behalf and caches the results at the edge for a day. The Worker identifies itself honestly in its User-Agent and does not pretend to be a browser. If Uniqlo refuses those requests, lookups fail and you can enter the details by hand.
+- **Storage.** Entries are stored in Cloudflare D1. Each entry keeps a snapshot of the product, so your records survive when a product is delisted.
+- **Access.** There is one user, and a single access token (`APP_TOKEN`) protects the whole API.
+- **Archived images.** Images in R2 are named by a hash of the original URL, so each image is stored only once. Pages prefer the archived copy and fall back to the original URL if it's unavailable. Archived images are served publicly under `/media/...`, because `<img>` tags can't send a token. They are Uniqlo's public product images anyway.
+- **Font and theme.** The UI uses Space Grotesk (SIL Open Font License). The font file lives in `public/fonts/` and is bundled into the Worker, so no external font service is needed.
 
-## 部署
+## Deploy your own
 
-需要 Node.js 18+ 和一个 Cloudflare 账号（免费）。
+You need Node.js 18+ and a free Cloudflare account.
 
 ```bash
 npm install
@@ -44,27 +51,27 @@ npm install
 npx wrangler login
 ```
 
-创建数据库，然后把输出里的 `database_id` 填到 `wrangler.jsonc`：
+Create the database, then copy the `database_id` from the output into `wrangler.jsonc`:
 
 ```bash
 npx wrangler d1 create uniqlo-fitlog
 ```
 
-建表：
+Create the tables:
 
 ```bash
 npm run db:migrate:remote
 ```
 
-创建图片存档用的 R2 存储桶（R2 免费额度 10 GB，足够个人使用，但 Cloudflare 要求先在控制台开通 R2 并绑定付款方式）：
+Create the R2 bucket for the image archive. The R2 free tier includes 10 GB, which is plenty for personal use, but Cloudflare asks you to enable R2 and add a payment method in the dashboard first.
 
 ```bash
 npx wrangler r2 bucket create uniqlo-fitlog-images
 ```
 
-不想用 R2 的话，删掉 `wrangler.jsonc` 里的 `r2_buckets` 一段即可，应用照常运行，只是不存档。
+To skip R2, delete the `r2_buckets` block from `wrangler.jsonc`. Everything else still works; images just won't be archived.
 
-设置访问口令（随便取一个足够长的字符串，登录时要输入）：
+Set an access token. Any long random string works; you'll type it in when you sign in.
 
 ```bash
 npx wrangler secret put APP_TOKEN
@@ -74,9 +81,9 @@ npx wrangler secret put APP_TOKEN
 npm run deploy
 ```
 
-部署完成后会得到 `https://uniqlo-fitlog.<你的子域>.workers.dev`。用手机打开，输入口令，再“添加到主屏幕”即可。
+You'll get a URL like `https://uniqlo-fitlog.<your-subdomain>.workers.dev`. Open it on your phone, enter the token, and use "Add to Home Screen".
 
-## 本地开发
+## Local development
 
 ```bash
 echo 'APP_TOKEN=dev-token' > .dev.vars
@@ -90,53 +97,54 @@ npm run db:migrate:local
 npm run dev
 ```
 
-打开 http://localhost:8787 ，口令填 `dev-token`。
+Open http://localhost:8787 and sign in with `dev-token`.
 
-运行解析逻辑的单元测试：
+Run the parser unit tests:
 
 ```bash
 npm test
 ```
 
-## 查询不到商品时
+## When a product can't be found
 
-Worker 请求官网商品页（`/{region}/{lang}/products/E465185-000/00`），读取页面里嵌入的 `window.__PRELOADED_STATE__` → `entity.pdpEntity` 中的商品数据，包括名称、分类面包屑、颜色、尺码、价格、材质和各颜色图片。读不到嵌入数据时，退回解析页面的 og 标签和 JSON-LD。
+The Worker requests the product page (`/{region}/{lang}/products/E465185-000/00`) and reads the product data embedded in the page's `window.__PRELOADED_STATE__` → `entity.pdpEntity`. That data includes the name, category breadcrumbs, colors, sizes, prices, material and images for each color. If the embedded data is missing, the Worker falls back to the page's Open Graph tags and JSON-LD.
 
-有些款本站官网没有上架（比如只在别国官网卖的加长款），这时会同时去 `UQ_FALLBACK` 里的站点查（默认英国、美国、澳大利亚、新加坡、日本），按顺序取第一个查到的。名称、图片、颜色、尺码照常带回来，外币价格只作参考，不会预填成原价和购买价。
+Some products aren't listed on your home region's site, such as long-length versions sold only in other countries. In that case the Worker also checks the sites listed in `UQ_FALLBACK` (UK, US, Australia, Singapore and Japan by default) and uses the first match. Name, images, colors and sizes come back as usual. A price in a foreign currency is shown for reference only and isn't pre-filled as the original or paid price.
 
-官网的 commerce 接口要求官网前端专用的客户端标识，这里不冒充，所以不用接口。请求时如实标明 User-Agent。
+The site's commerce API requires a client ID reserved for Uniqlo's own front end. FITLOG doesn't impersonate that client, so it doesn't use the API.
 
-如果官网改版导致字段变化，可以用调试接口查看优衣库返回的原始数据：
+If a site redesign changes the data format, inspect what Uniqlo returns with the debug endpoint:
 
 ```bash
-curl -H "Authorization: Bearer <APP_TOKEN>" https://<你的域名>/api/product/465185/raw
+curl -H "Authorization: Bearer <APP_TOKEN>" https://<your-domain>/api/product/465185/raw
 ```
 
-然后按实际字段调整 `src/uniqlo.js` 里的 `normalizeApi`。查不到的商品也可以在页面上选「手动填写商品信息」。
+Then adjust `normalizeApi` in `src/uniqlo.js` to match. For a product that can't be found at all, choose "Enter product details manually" on the add page.
 
-## 官网图片存档
+## Image archive
 
-- 新建或编辑记录后，Worker 在后台下载这条记录引用的所有官网图并存进 R2。只接受真正的图片文件（同时检查 Content-Type 和文件头），单张上限 8 MB。
-- Workers 免费套餐每次请求最多 50 个外部子请求，所以每次最多存 30 张。没存完或下载失败的，可以在「设置 → 官网图片存档」里点「补存剩下的图片」。
-- 删除记录不会删除已存档的图片（别的记录可能也在用）。
+- After you create or edit an entry, the Worker downloads every product image the entry uses into R2 in the background. It only accepts real image files (checking both the Content-Type and the file signature), up to 8 MB each.
+- The free Workers plan allows 50 outbound requests per invocation, so the Worker archives at most 30 images per run. To archive anything left over or anything that failed, go to Settings → Image archive and click "Archive remaining images".
+- Deleting an entry doesn't delete its archived images, since other entries may use them.
 
-## 降价提醒
+## Price alerts
 
-在试穿记录详情页底部点「Watch price」，或者在首页筛选「Want」、在降价提醒页一键关注所有想买的商品。关注时，可以填一个目标价（不填就是只要比现在便宜就提醒）。顶栏的铃铛是关注列表。
+Tap "Watch price" at the bottom of an item's page. To watch everything marked "Want", filter the home page by "Want" or use the button on the Price Alerts page (the bell in the top bar). You can set an optional target price. Without a target, you get an alert on any drop.
 
-- Worker 每小时运行一次定时任务（`triggers.crons`），每次查 4 件最久没查的商品。每件商品查 `/00` 和 `/01` 两个价格组：欧洲站的「Reduced Price」常常是单独的 `/01` 页面，只有部分颜色降价。
-- 降到比上次提醒时便宜（并且达到目标价，如果设了的话）就发一封邮件，同一次检查里的降价合并成一封。涨回去后会重新计算，下次再降还会提醒。
-- 只有本站官网查到的商品能关注。手动填写的、从别国站点查到的商品不能关注。
+- **Schedule.** A cron trigger (`triggers.crons`) runs every hour and checks the four least recently checked items.
+- **Price groups.** Each check looks at two price groups, `/00` and `/01`. On the European sites, "Reduced Price" items are often a separate `/01` page where only some colors are discounted.
+- **When you get an email.** You get one when the price falls below the price at your last alert, and reaches your target if you set one. Drops found in the same run are combined into one email. If the price goes back up, the baseline resets, so you're alerted again on the next drop.
+- **What can be watched.** Only products found on your home region's site can be watched. Manually entered products and products found on fallback regions can't.
 
-邮件通过 [Resend](https://resend.com) 发送，免费额度每月 3000 封。设置步骤：
+Emails are sent through [Resend](https://resend.com), whose free tier includes 3,000 emails a month. To set it up:
 
-1. 用你想收提醒的邮箱注册 Resend，在 API Keys 页面创建一个 key（权限选 Sending access 即可）。
-2. 打开 Cloudflare 控制台 → Workers & Pages → `uniqlo-fitlog` → Settings → Variables and Secrets，添加一个 **Secret**，名称 `RESEND_API_KEY`，值填刚才的 key。也可以用命令行：`npx wrangler secret put RESEND_API_KEY`。
-3. 在应用的「降价提醒」页填上同一个邮箱，点「发一封测试邮件」确认能收到。
+1. Sign up for Resend with the address you want alerts sent to. On the API Keys page, create a key with "Sending access".
+2. In the Cloudflare dashboard, go to Workers & Pages → `uniqlo-fitlog` → Settings → Variables and Secrets. Add a **Secret** named `RESEND_API_KEY` whose value is that key. You can also set it from the command line with `npx wrangler secret put RESEND_API_KEY`.
+3. On the app's Price Alerts page, enter the same email address and click "Send a test email" to confirm it arrives.
 
-没有绑定自己域名的 Resend 账号只能用 `onboarding@resend.dev` 发信，并且只能发到注册时用的邮箱。想发到别的邮箱，需要在 Resend 验证一个自己的域名，再在 `wrangler.jsonc` 的 vars 里加 `"ALERT_FROM": "UNIQLO FITLOG <alerts@你的域名>"`。
+A Resend account without a verified domain can only send from `onboarding@resend.dev`, and only to the address you signed up with. To send to other addresses, verify your own domain in Resend, then add `"ALERT_FROM": "UNIQLO FITLOG <alerts@your-domain>"` to the vars in `wrangler.jsonc`.
 
-## 可以继续加的功能
+## Ideas
 
-- 上传自己的试穿照片（同样存 R2）
-- 记录身高体重和平时尺码，按款式统计「这类衣服我该选哪个码」
+- Upload your own try-on photos (also stored in R2)
+- Record height, weight and usual sizes, and get suggestions like "for this kind of item, pick size M"

@@ -1216,7 +1216,7 @@ function drawThemeBtn() {
   const mode = document.documentElement.dataset.theme || (darkQuery.matches ? 'dark' : 'light');
   themeBtn.dataset.mode = mode;
   themeBtn.querySelector('span').textContent = mode === 'dark' ? 'Dark' : 'Light';
-  const color = mode === 'dark' ? '#6a0c06' : '#b2c7ab';
+  const color = mode === 'dark' ? '#6a0c06' : '#ffffff';
   document.querySelectorAll('meta[name=theme-color]').forEach((m) => m.setAttribute('content', color));
 }
 themeBtn.addEventListener('click', () => {

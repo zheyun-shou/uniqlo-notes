@@ -1,4 +1,4 @@
-/* 视觉参考 mijobello.com：鼠尾草绿底 + 酒红字（深色模式两色对调）、全站 Space Grotesk、
+/* 视觉参考 mijobello.com：白底 + 酒红字（深色模式两色对调）、全站 Space Grotesk、
    细线网格、直角、小号大写宽字距标签、小写粗体大标题加句点；强调用反色色块，不另加颜色 */
 @font-face {
   font-family: "Space Grotesk";
@@ -10,15 +10,15 @@
 }
 
 :root {
-  --sage: #b2c7ab;
+  --paper: #ffffff;
   --blood: #6a0c06;
-  --bg: var(--sage);
+  --bg: var(--paper);
   --text: var(--blood);
   color-scheme: light;
 }
-:root[data-theme="dark"] { --bg: var(--blood); --text: var(--sage); color-scheme: dark; }
+:root[data-theme="dark"] { --bg: var(--blood); --text: var(--paper); color-scheme: dark; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --bg: var(--blood); --text: var(--sage); color-scheme: dark; }
+  :root:not([data-theme="light"]) { --bg: var(--blood); --text: var(--paper); color-scheme: dark; }
 }
 :root {
   --muted: color-mix(in srgb, var(--text) 80%, var(--bg));

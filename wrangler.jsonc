@@ -33,8 +33,12 @@
     // 本站查不到时同时去这些站点查（有的款只在别国官网上架，比如加长款），按顺序取第一个查到的
     "UQ_FALLBACK": "uk/en,us/en,au/en,sg/en,jp/ja",
     // 降价提醒邮件里「管理降价提醒」链接指向的地址
-    "APP_URL": "https://uniqlo-fitlog.uniqlo-fitlog.workers.dev"
+    "APP_URL": "https://fitlog.zheyuns.com"
   },
+
+  // 自定义域名（域名需在同一个 Cloudflare 账号里，部署时自动创建 DNS 记录和证书）；workers.dev 地址同时保留
+  "routes": [{ "pattern": "fitlog.zheyuns.com", "custom_domain": true }],
+  "workers_dev": true,
 
   // 降价提醒：每小时查一批关注的商品（每次 4 件，按最久没查的轮流）
   "triggers": { "crons": ["17 * * * *"] }

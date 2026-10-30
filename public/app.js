@@ -342,10 +342,10 @@ async function renderNew(prefill) {
     <section class="panel">
       <h2>查询商品</h2>
       <form id="lookup" class="lookup">
-        <input type="text" name="pid" inputmode="text" placeholder="6 位编号，如 465185，或粘贴官网链接" value="${esc(prefill)}" required autocomplete="off">
+        <input type="text" name="pid" inputmode="text" placeholder="6 位编号、官网链接或商品名称" value="${esc(prefill)}" required autocomplete="off">
         <button class="btn primary" id="go">查询</button>
       </form>
-      <p class="hint">编号在吊牌上（“Art. No.”/商品编号）或官网商品页里。</p>
+      <p class="hint">编号在吊牌上（“Art. No.”/商品编号）或官网商品页里；也可以输入英文商品名，如 baggy barrel leg jeans。</p>
       <p class="error" id="err" hidden></p>
     </section>
     <div id="form-slot"></div>`;
@@ -355,15 +355,18 @@ async function renderNew(prefill) {
   const slot = app.querySelector('#form-slot');
   const go = app.querySelector('#go');
 
-  const run = async () => {
-    const raw = form.pid.value.trim();
-    if (!raw) return;
+  const busy = (on) => {
+    go.disabled = on;
+    go.textContent = on ? '查询中…' : '查询';
+  };
+
+  // 按编号/链接查询
+  const lookup = async (input) => {
     err.hidden = true;
-    go.disabled = true;
-    go.textContent = '查询中…';
+    busy(true);
     slot.innerHTML = `<section class="panel"><div class="product"><div class="hero skeleton"></div><div><div class="skeleton" style="height:18px;margin-bottom:8px"></div><div class="skeleton" style="height:14px;width:60%"></div></div></div></section>`;
     try {
-      const { product } = await api(`/product/${encodeURIComponent(raw)}`);
+      const { product } = await api(`/product/${encodeURIComponent(input)}`);
       const entries = await loadEntries().catch(() => []);
       const previous = entries.filter((e) => e.product?.productId === product.productId);
       renderForm(slot, { product, category: guessCategory(product), triedAt: today() }, { previous });
@@ -371,22 +374,74 @@ async function renderNew(prefill) {
       if (e.status === 401) return;
       err.hidden = false;
       err.textContent = e.message;
-      const code = (raw.match(/\d{6}/) || [''])[0];
+      const code = (input.match(/\d{6}/) || [''])[0];
       slot.innerHTML = '';
       if (e.status === 404 || e.status >= 500) {
-        slot.innerHTML = `<section class="panel"><p style="margin:0 0 10px">查不到也可以手动记录：</p><button class="btn" id="manual">手动填写商品信息</button></section>`;
+        slot.innerHTML = `<section class="panel">
+            ${e.status === 404 ? '<p style="margin:0 0 10px">吊牌上的编号有时和官网的不一样，可以在上面输入英文商品名搜索。</p>' : ''}
+            <p style="margin:0 0 10px">也可以手动记录：</p><button class="btn" id="manual">手动填写商品信息</button></section>`;
         slot.querySelector('#manual').addEventListener('click', () =>
           renderForm(slot, {
-            product: { productId: e.body?.productId || (code ? `E${code}-000` : raw), code, name: '', category: [], images: [], colors: [], sizes: [], source: 'manual' },
+            product: { productId: e.body?.productId || (code ? `E${code}-000` : input), code, name: '', category: [], images: [], colors: [], sizes: [], source: 'manual' },
             category: 'other',
             triedAt: today(),
           }),
         );
       }
     } finally {
-      go.disabled = false;
-      go.textContent = '查询';
+      busy(false);
     }
+  };
+
+  // 按名称搜索，点结果再按编号查询
+  const search = async (q) => {
+    err.hidden = true;
+    busy(true);
+    slot.innerHTML = `<div class="grid" style="margin-top:20px">${'<div class="card"><div class="thumb skeleton"></div></div>'.repeat(4)}</div>`;
+    try {
+      const { results, region, fallback } = await api(`/search?q=${encodeURIComponent(q)}`);
+      if (!results.length) {
+        slot.innerHTML = `<section class="panel"><p style="margin:0">没有搜到「${esc(q)}」。官网是英文名，试试换个说法，比如 wide pants、oversized shirt。</p></section>`;
+        return;
+      }
+      slot.innerHTML = `
+        <section class="panel">
+          <h2>选择商品 <span class="hint" style="font-weight:400">${results.length} 个结果${fallback ? `（本站没搜到，来自${esc(REGION_NAME[region] || region)}站）` : ''}</span></h2>
+          <div class="grid">${results
+            .map(
+              (r) => `<button type="button" class="card result" data-id="${esc(r.productId)}" data-pg="${esc(r.priceGroup)}">
+                <div class="thumb">${r.image ? img(r.image, r.name) : ''}</div>
+                <div class="body">
+                  <div class="cap">${esc(r.productId.replace(/^E/, '').replace(/-000$/, ''))}</div>
+                  <div class="name">${esc(r.name)}</div>
+                  ${r.price ? `<div class="price${(r.flags || []).includes('Reduced Price') ? ' sale' : ''}"><b>${esc(r.price)}</b></div>` : ''}
+                  ${r.flags?.length ? `<div class="cap">${esc(r.flags.join(' · '))}</div>` : ''}
+                </div>
+              </button>`,
+            )
+            .join('')}</div>
+        </section>`;
+      slot.querySelectorAll('.result').forEach((b) =>
+        b.addEventListener('click', () => {
+          scrollTo({ top: 0 });
+          lookup(`/products/${b.dataset.id}/${b.dataset.pg}`);
+        }),
+      );
+    } catch (e) {
+      if (e.status === 401) return;
+      slot.innerHTML = '';
+      err.hidden = false;
+      err.textContent = e.message;
+    } finally {
+      busy(false);
+    }
+  };
+
+  // 有 6 位数字就当编号/链接查，否则按名称搜
+  const run = () => {
+    const raw = form.pid.value.trim();
+    if (!raw) return;
+    return /\d{6}/.test(raw) ? lookup(raw) : search(raw);
   };
 
   form.addEventListener('submit', (ev) => {

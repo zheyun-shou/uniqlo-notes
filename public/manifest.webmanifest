@@ -1,6 +1,6 @@
 {
-  "name": "试穿手记",
-  "short_name": "试穿手记",
+  "name": "UNIQLO FITLOG",
+  "short_name": "FITLOG",
   "description": "记录试穿过的优衣库服装和反馈",
   "start_url": "/",
   "scope": "/",

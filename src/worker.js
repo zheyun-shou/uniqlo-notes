@@ -1,4 +1,4 @@
-import { fetchUpstream, lookupProduct, parseProductInput } from './uniqlo.js';
+import { fetchSearchPage, fetchUpstream, lookupProduct, parseProductInput, parseSearchResults } from './uniqlo.js';
 import { archiveBacklog, archiveEntry, archiveStatus, serveMedia } from './archive.js';
 import { serveStatic } from './static.js';
 
@@ -43,6 +43,16 @@ async function route(request, env, ctx, url) {
       return json(await fetchUpstream(input, o));
     }
     return productLookup(input, opts, ctx);
+  }
+
+  if (parts[0] === 'search' && method === 'GET') {
+    const q = (url.searchParams.get('q') || '').trim().slice(0, 100);
+    if (!q) return json({ error: 'bad_query', message: '请输入要搜索的名称' }, 400);
+    if (parts[1] === 'raw') {
+      const page = await fetchSearchPage(q, opts);
+      return json({ url: page.url, status: page.status, length: page.html.length, results: parseSearchResults(page.html) });
+    }
+    return productSearch(q, opts, ctx);
   }
 
   if (parts[0] === 'archive') {
@@ -122,6 +132,29 @@ async function productLookup(input, opts, ctx) {
   }
   const res = json({ product }, 200, { 'Cache-Control': `max-age=${PRODUCT_CACHE_SECONDS}` });
   ctx.waitUntil(cache.put(cacheKey, res.clone()));
+  return res;
+}
+
+// 按名称搜索：先搜本站，没结果再依次搜 fallback 站点；结果缓存 1 小时
+async function productSearch(q, opts, ctx) {
+  const cacheKey = new Request(`https://cache.internal/v2/search/${opts.region}/${opts.lang}/${encodeURIComponent(q.toLowerCase())}`);
+  const hit = await caches.default.match(cacheKey);
+  if (hit) return hit;
+  let region = opts.region;
+  let results = [];
+  let reachable = false;
+  for (const o of [opts, ...opts.fallback.filter((x) => x.region !== opts.region)]) {
+    const page = await fetchSearchPage(q, o);
+    if (page.status === 200) reachable = true;
+    results = parseSearchResults(page.html);
+    if (results.length) {
+      region = o.region;
+      break;
+    }
+  }
+  if (!reachable) return json({ error: 'upstream_error', message: '暂时连不上优衣库官网，可以稍后再试' }, 502);
+  const res = json({ q, region, fallback: region !== opts.region, results }, 200, { 'Cache-Control': 'max-age=3600' });
+  ctx.waitUntil(caches.default.put(cacheKey, res.clone()));
   return res;
 }
 

@@ -242,7 +242,7 @@ function decodeEntities(s) {
   return s
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/&#39;|&#x27;/g, "'")
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>');
 }
@@ -265,4 +265,58 @@ function normalizePage(meta, parsed, url) {
     source: 'page',
     fetchedAt: Date.now(),
   };
+}
+
+// ---------- 按名称搜索 ----------
+
+export function searchPageUrl(region, lang, q) {
+  return `https://www.uniqlo.com/${region}/${lang}/search?q=${encodeURIComponent(q)}`;
+}
+
+/** 请求官网搜索页，返回原始 HTML（也用于 /api/search/raw 调试） */
+export async function fetchSearchPage(q, { region, lang }) {
+  const url = searchPageUrl(region, lang, q);
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html' } });
+    return { url, status: res.status, html: res.ok ? await res.text() : '' };
+  } catch (e) {
+    return { url, status: 0, error: String(e?.message || e), html: '' };
+  }
+}
+
+/**
+ * 从搜索页 HTML 里取出商品格子：每个格子是一个 class 含 product-tile__link 的 <a>，
+ * href 里有商品编号和 priceGroup，aria-label 是「名称, 价格, 性别」，后面紧跟商品图。
+ */
+export function parseSearchResults(html, max = 24) {
+  const out = [];
+  const seen = new Set();
+  for (let i = html.indexOf('product-tile__link'); i >= 0 && out.length < max; i = html.indexOf('product-tile__link', i + 1)) {
+    const start = html.lastIndexOf('<a', i);
+    const end = html.indexOf('>', i);
+    if (start < 0 || end < 0) continue;
+    const tag = html.slice(start, end);
+    const href = (tag.match(/href="([^"]+)"/) || [])[1] || '';
+    const m = href.match(/\/products\/([A-Z]\d{6}-\d{3})\/(\d{2})/);
+    if (!m || seen.has(m[1] + m[2])) continue;
+    seen.add(m[1] + m[2]);
+    const label = decodeEntities((tag.match(/aria-label="([^"]*)"/) || [])[1] || '');
+    const rest = html.slice(end, end + 4000);
+    const imgTag = (rest.match(/<img[^>]+>/) || [])[0] || '';
+    const image = decodeEntities((imgTag.match(/src="([^"]+)"/) || [])[1] || '');
+    const alt = decodeEntities((imgTag.match(/alt="([^"]*)"/) || [])[1] || '');
+    // 「Baggy Barrel Leg Jeans, 399 kr, Reduced Price, Unisex」：名称、价格，后面是若干标记；
+    // 名称里也可能有逗号，所以以第一个带数字的片段为价格
+    const segs = label.split(', ');
+    const pi = segs.findIndex((x, k) => k > 0 && /\d/.test(x));
+    out.push({
+      productId: m[1],
+      priceGroup: m[2],
+      name: alt || (pi > 0 ? segs.slice(0, pi).join(', ') : label),
+      price: pi > 0 ? segs[pi] : '',
+      flags: pi > 0 ? segs.slice(pi + 1) : [],
+      image: image ? image.replace(/\?width=\d+/, '?width=450') : null,
+    });
+  }
+  return out;
 }

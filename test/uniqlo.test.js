@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parseProductInput, normalizeApi, parseHtml, lookupProduct, extractPdpProduct } from '../src/uniqlo.js';
+import { parseProductInput, normalizeApi, parseHtml, lookupProduct, extractPdpProduct, parseSearchResults } from '../src/uniqlo.js';
 
 const opts = { region: 'se', lang: 'en' };
 
@@ -140,4 +140,23 @@ test('lookupProduct：所有站点都查不到时返回 null', async () => {
   const r = await lookupProduct('486817', { ...opts, fallback: [{ region: 'us', lang: 'en' }] });
   assert.equal(r.product, null);
   assert.equal(r.upstreamDown, false);
+});
+
+test('parseSearchResults：从搜索页商品格子取出编号、名称、价格、图片', () => {
+  const tile = (id, pg, label, img, alt) =>
+    `<div><a class="link ec-link product-tile__link" href="/se/en/products/${id}/${pg}?colorDisplayCode=56" target="_self" aria-label="${label}"><div class="product-tile"><div class="image"><img src="${img}?width=300" alt="${alt}" class="image__img"/></div></div></a></div>`;
+  const html =
+    '<header>…</header>' +
+    tile('E479000-001', '00', 'Baggy Barrel Leg Jeans, 599 kr, Unisex', 'https://image.uniqlo.com/a.jpg', 'Baggy Barrel Leg Jeans') +
+    tile('E479000-001', '01', 'Baggy Barrel Leg Jeans, 399 kr, Reduced Price, Unisex', 'https://image.uniqlo.com/b.jpg', 'Baggy Barrel Leg Jeans') +
+    tile('E479000-001', '01', 'dup', 'https://image.uniqlo.com/b.jpg', 'dup') +
+    tile('E488882-000', '00', 'Volume Trousers, 499 kr', 'https://image.uniqlo.com/c.jpg', 'Volume Trousers &amp; More');
+  const r = parseSearchResults(html);
+  assert.equal(r.length, 3);
+  assert.deepEqual(r[0], { productId: 'E479000-001', priceGroup: '00', name: 'Baggy Barrel Leg Jeans', price: '599 kr', flags: ['Unisex'], image: 'https://image.uniqlo.com/a.jpg?width=450' });
+  assert.deepEqual(r[1].flags, ['Reduced Price', 'Unisex']);
+  assert.equal(r[1].price, '399 kr');
+  assert.equal(r[2].name, 'Volume Trousers & More');
+  assert.deepEqual(r[2].flags, []);
+  assert.deepEqual(parseSearchResults('<html>no results</html>'), []);
 });

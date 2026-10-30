@@ -248,15 +248,15 @@ function renderLogin() {
 // ---------- 列表 ----------
 
 async function renderList() {
-  app.innerHTML = `<div class="page-head"><h1>My Try-Ons</h1></div><div class="grid" style="margin-top:16px">${'<div class="card"><div class="thumb skeleton"></div><div class="body"><div class="skeleton" style="height:14px"></div></div></div>'.repeat(4)}</div>`;
+  app.innerHTML = `<div class="page-head"><h1>My Closet</h1></div><div class="grid" style="margin-top:16px">${'<div class="card"><div class="thumb skeleton"></div><div class="body"><div class="skeleton" style="height:14px"></div></div></div>'.repeat(4)}</div>`;
   const entries = await loadEntries();
 
   if (!entries.length) {
     app.innerHTML = `
       <div class="empty">
-        <h2>No try-ons yet</h2>
+        <h2>Your closet is empty</h2>
         <p>Tap “+ Add” below and enter a product number or English product name.</p>
-        <p><a class="btn primary" href="#/new">Add your first one</a></p>
+        <p><a class="btn primary" href="#/new">Add your first item</a></p>
       </div>`;
     return;
   }
@@ -272,8 +272,8 @@ async function renderList() {
     `<button class="chip" data-group="${group}" data-key="${key}" aria-pressed="${f[group] === key}">${esc(label)}${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
 
   app.innerHTML = `
-    <div class="page-head"><h1>My Try-Ons</h1><span class="count" id="count"></span></div>
-    <input class="search" type="search" placeholder="Search my try-ons and uniqlo.com…" value="${esc(f.q)}" aria-label="Search">
+    <div class="page-head"><h1>My Closet</h1><span class="count" id="count"></span></div>
+    <input class="search" type="search" placeholder="Search my closet and uniqlo.com…" value="${esc(f.q)}" aria-label="Search">
     <div class="tabs" role="group" aria-label="Category">
       ${chip('cat', 'all', 'All')}
       ${CATEGORIES.filter(([k]) => catCounts[k]).map(([k, n]) => chip('cat', k, n, catCounts[k])).join('')}
@@ -319,7 +319,7 @@ async function renderList() {
     wantBar.hidden = f.verdict !== 'want';
     grid.innerHTML = list.length
       ? list.map(cardHtml).join('')
-      : `<p class="empty" style="grid-column:1/-1;padding:32px 16px">${q ? 'No matching try-ons' : 'No try-ons in this filter'}</p>`;
+      : `<p class="empty" style="grid-column:1/-1;padding:32px 16px">${q ? 'No matching items' : 'No items in this filter'}</p>`;
   };
   draw();
 
@@ -628,7 +628,7 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
             ${p.region ? `<span>Not listed on your site — details from the ${esc(REGION_NAME[p.region] || p.region)} site${p.refPrice ? `, reference price ${esc(refPriceText(p))}` : ''}</span>` : ''}
             ${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">Product page ↗</a>` : ''}
           </div>
-          ${previous.length ? `<p class="hint">You've tried this ${previous.length === 1 ? 'once' : `${previous.length} times`}: ${previous.map((e) => `<a href="#/entry/${esc(e.id)}">${esc(e.triedAt || '')} ${esc(e.size || '')}</a>`).join(', ')}</p>` : ''}
+          ${previous.length ? `<p class="hint">Already in your closet ${previous.length === 1 ? 'once' : `${previous.length} times`}: ${previous.map((e) => `<a href="#/entry/${esc(e.id)}">${esc(e.triedAt || '')} ${esc(e.size || '')}</a>`).join(', ')}</p>` : ''}
         </div>
       </div>
       ${
@@ -646,7 +646,7 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
     </section>
 
     <form class="panel" id="entry-form">
-      <h2>${editing ? 'Edit try-on' : 'Try-on notes'}</h2>
+      <h2>${editing ? 'Edit item' : 'My notes'}</h2>
       <div class="fields">
         ${
           manual
@@ -657,9 +657,9 @@ function renderForm(slot, entry, { previous = [], editing = false } = {}) {
         <label class="field"><span>Category</span>
           <select name="category">${CATEGORIES.map(([k, n]) => `<option value="${k}" ${entry.category === k ? 'selected' : ''}>${n}</option>`).join('')}</select>
         </label>
-        <label class="field"><span>Date tried</span><input type="date" name="triedAt" value="${esc(entry.triedAt || '')}"></label>
+        <label class="field"><span>Date</span><input type="date" name="triedAt" value="${esc(entry.triedAt || '')}"></label>
         <div class="field full"><span>Color</span>${picker('color', colorOpts, entry.color || '', colorOpts.length ? 'Other' : 'e.g. 09 BLACK', colorChips)}</div>
-        <div class="field full"><span>Size tried</span>${picker('size', sizeOpts, entry.size || '', 'Other')}</div>
+        <div class="field full"><span>Size</span>${picker('size', sizeOpts, entry.size || '', 'Other')}</div>
         <div class="field full"><span>Fit</span>${seg('fit', FIT, entry.fit)}</div>
         <div class="field full"><span>Length</span>${seg('length', LENGTH, entry.length)}</div>
         <div class="field"><span>Rating</span>
@@ -813,7 +813,7 @@ async function renderDetail(id) {
 
   const row = (k, v) => (v ? `<dt>${k}</dt><dd>${v}</dd>` : '');
   app.innerHTML = `
-    <a class="back" href="#/">‹ All try-ons</a>
+    <a class="back" href="#/">‹ My closet</a>
     <article class="detail">
       <div class="detail-hero">
         ${gallery.length ? `<div class="gallery">${gallery.map((i) => img(i, p.name)).join('')}</div>` : ''}
@@ -827,9 +827,9 @@ async function renderDetail(id) {
             ${stars(e.rating)}
           </div>
           <section class="panel">
-            <h2>Try-on notes</h2>
+            <h2>My notes</h2>
             <dl class="kv">
-              ${row('Date tried', esc(e.triedAt))}
+              ${row('Date', esc(e.triedAt))}
               ${row('Store', esc(e.store))}
               ${row('Color', esc(e.color))}
               ${row('Size', esc(e.size))}
@@ -857,7 +857,7 @@ async function renderDetail(id) {
           ${canWatch(p) ? '<section class="panel" id="watch-panel"><h2>Price alert</h2><p class="hint" style="margin:0">Loading…</p></section>' : ''}
           ${
             related.length
-              ? `<section class="panel"><h2>Other try-ons of this item</h2><div class="related">${related
+              ? `<section class="panel"><h2>Other entries for this item</h2><div class="related">${related
                   .map((r) => `<a href="#/entry/${esc(r.id)}"><span>${esc(r.triedAt || '')} · ${esc(r.size || '')} ${esc(r.color || '')}</span><span>${FIT[r.fit] || ''}</span></a>`)
                   .join('')}</div></section>`
               : ''
@@ -875,7 +875,7 @@ async function renderDetail(id) {
   if (wp) drawWatchPanel(wp, p);
 
   app.querySelector('#del').addEventListener('click', async () => {
-    if (!confirm('Delete this try-on?')) return;
+    if (!confirm('Delete this item?')) return;
     try {
       await api(`/entries/${encodeURIComponent(e.id)}`, { method: 'DELETE' });
       state.entries = state.entries.filter((x) => x.id !== e.id);
@@ -1011,7 +1011,7 @@ async function renderWatch() {
         watches.length
           ? `<div class="grid">${watches.map(watchCard).join('')}</div>
              <p class="hint" style="margin-top:20px">A batch is checked every hour (4 items at a time, in rotation), so with many items each one is checked every few hours.${ready ? '' : ' <b>Email isn’t set up yet, so drops won’t be sent.</b>'}</p>`
-          : '<p class="hint" style="margin:0">Nothing watched yet. Open any try-on and tap “Watch price” at the bottom, or watch everything marked “Want” in one tap.</p>'
+          : '<p class="hint" style="margin:0">Nothing watched yet. Open any item in your closet and tap “Watch price” at the bottom, or watch everything marked “Want” in one tap.</p>'
       }
     </section>`;
 
@@ -1100,7 +1100,7 @@ async function renderSettings() {
     <section class="panel">
       <h2>Overview</h2>
       <div class="stats">
-        <div class="stat"><b>${entries.length}</b><span>Try-ons</span></div>
+        <div class="stat"><b>${entries.length}</b><span>Items</span></div>
         <div class="stat"><b>${new Set(entries.map((e) => e.product?.productId)).size}</b><span>Styles</span></div>
         <div class="stat"><b>${count('bought')}</b><span>Bought</span></div>
         <div class="stat"><b>${count('want')}</b><span>Want</span></div>
@@ -1115,13 +1115,13 @@ async function renderSettings() {
           : !archive.enabled
             ? '<p class="hint" style="margin:0">Off: the server has no R2 bucket bound (see the README). Images load live from uniqlo.com and may disappear when a product is removed.</p>'
             : `<p style="margin:0 0 10px">Archived <b>${archive.archived}</b> / ${archive.total} product images</p>
-               <p class="hint" style="margin:0 0 12px">Product images are copied to your own storage when you save a try-on, so they stay even if uniqlo.com removes them.</p>
+               <p class="hint" style="margin:0 0 12px">Product images are copied to your own storage when you save an item, so they stay even if uniqlo.com removes them.</p>
                ${archive.archived < archive.total ? '<div class="actions" style="justify-content:flex-start"><button class="btn" id="backfill">Archive remaining images</button></div>' : ''}`
       }
     </section>
     <section class="panel">
       <h2>Backup</h2>
-      <p class="hint" style="margin:0 0 12px">Export as a JSON file. Importing adds the records in the file as new try-ons.</p>
+      <p class="hint" style="margin:0 0 12px">Export as a JSON file. Importing adds the records in the file as new items.</p>
       <div class="actions" style="justify-content:flex-start">
         <button class="btn" id="export">Export JSON</button>
         <label class="btn">Import JSON<input type="file" id="import" accept="application/json,.json" hidden></label>

@@ -1,7 +1,7 @@
 {
   "name": "UNIQLO FITLOG",
   "short_name": "FITLOG",
-  "description": "A personal log of Uniqlo clothes you tried on",
+  "description": "A personal closet log for Uniqlo clothes",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
